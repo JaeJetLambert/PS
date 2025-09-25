@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project Status Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>📊 Project Status Dashboard</h1>
+
+  <button id="addProjectBtn">➕ Add Project</button>
+  <div id="projectsContainer"></div>
+
+  <h2>✅ Completed Projects</h2>
+  <div id="completedContainer"></div>
+
+  <!-- Modal for adding project/line item -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <h3 id="modalTitle"></h3>
+      <label>
+        Name:
+        <input id="modalName" type="text">
+      </label>
+      <label id="startDateLabel" class="hidden">
+        Start Date:
+        <input id="modalStartDate" type="date">
+      </label>
+      <label id="dueDaysLabel" class="hidden">
+        Days to Complete:
+        <input id="modalDueDays" type="number" min="1" value="7">
+      </label>
+      <div class="modal-buttons">
+        <button id="modalSave">Save</button>
+        <button id="modalCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
