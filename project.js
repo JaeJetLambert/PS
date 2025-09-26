@@ -1,6 +1,6 @@
 // --- Load project name from query string ---
-const params = new URLSearchParams(window.location.search);
-const projectName = params.get("name");
+const projectName = new URLSearchParams(window.location.search).get("name");
+const project = projects.find(p => p.name === projectName);
 
 // Dummy data for now (later this will come from storage)
 const projects = [
