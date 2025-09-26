@@ -1,14 +1,22 @@
 // Demo data
-const projects = [
+cconst projects = [
   {
-    name: "Example Project",
-    designer: "Sarah",
+    name: "Project Smith",
+    designer: "Smith",
     tasks: [
-      { title: "Task 1", status: "In Progress" },
-      { title: "Task 2", status: "Not Started" }
-    ],
-    completed: false,
-    overdue: false
+      { name: "UI Design", status: "In Progress" },
+      { name: "Backend API", status: "Not Started" },
+      { name: "Testing", status: "Not Started" }
+    ]
+  },
+  {
+    name: "Project Bach",
+    designer: "Bach",
+    tasks: [
+      { name: "Research", status: "Completed" },
+      { name: "Prototype", status: "In Progress" },
+      { name: "Client Review", status: "Not Started" }
+    ]
   }
 ];
 
