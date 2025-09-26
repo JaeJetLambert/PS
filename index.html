@@ -52,6 +52,43 @@
       <h2 style="padding:1rem 2rem 0;">Active Projects</h2>
       <div class="dashboard-grid" id="projectGrid"></div>
     </section>
+    
+    <!-- New Project Modal -->
+<div id="newProjectModal" class="modal">
+  <div class="modal-content">
+    <span id="closeModal" class="close">&times;</span>
+    <h2>Create New Project</h2>
+    <form id="newProjectForm">
+      <label>
+        Project Name:
+        <input type="text" id="projectNameInput" required>
+      </label>
+      <label>
+        Designer:
+        <select id="designerSelect" required>
+          <option value="">--Select--</option>
+          <option value="Sarah">Sarah</option>
+          <option value="Darby">Darby</option>
+          <option value="Adaline">Adaline</option>
+        </select>
+      </label>
+      <label>
+        Type:
+        <select id="projectType" required>
+          <option value="">--Select--</option>
+          <option>Construction Only</option>
+          <option>Design Only</option>
+          <option>Construction and Design</option>
+        </select>
+      </label>
+      <label>
+        Start Date:
+        <input type="date" id="startDateInput" required>
+      </label>
+      <button type="submit" class="save-btn">Save Project</button>
+    </form>
+  </div>
+</div>
   </main>
 
   <script src="app.js"></script>

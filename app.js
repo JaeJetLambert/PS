@@ -19,6 +19,41 @@ function renderProjects() {
 renderProjects();
 // --- existing dashboard code remains above ---
 
+// --- New Project Modal Logic ---
+const modal = document.getElementById("newProjectModal");
+const newBtn = document.getElementById("newProjectBtn");
+const closeModal = document.getElementById("closeModal");
+const form = document.getElementById("newProjectForm");
+
+newBtn.addEventListener("click", () => {
+  modal.style.display = "block";
+});
+
+closeModal.addEventListener("click", () => {
+  modal.style.display = "none";
+});
+
+window.addEventListener("click", e => {
+  if (e.target === modal) modal.style.display = "none";
+});
+
+form.addEventListener("submit", e => {
+  e.preventDefault();
+  const newProj = {
+    name: document.getElementById("projectNameInput").value.trim(),
+    designer: document.getElementById("designerSelect").value,
+    type: document.getElementById("projectType").value,
+    startDate: document.getElementById("startDateInput").value
+  };
+  if (!newProj.name) return;
+
+  projects.push(newProj);
+  renderProjects();
+  updateCounters();        // if you already have this function
+  modal.style.display = "none";
+  form.reset();
+});
+
 
 // --- Project Detail Page Logic (NEW) ---
 function loadProjectDetail() {
