@@ -1,10 +1,15 @@
+/* ===========================================================
+   Global base styles
+   =========================================================== */
 body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #f3f4f6;
 }
 
-/* Top navigation */
+/* ===========================================================
+   Legacy topbar (not used on the new dashboard, kept for reuse)
+   =========================================================== */
 .topbar {
   background: #111827;
   color: #fff;
@@ -13,39 +18,21 @@ body {
   justify-content: space-between;
   align-items: center;
 }
+.nav-links { display: flex; gap: 2rem; }
+.nav-links a { color: #fff; text-decoration: none; font-weight: 500; }
+.nav-links a:hover { text-decoration: underline; }
 
-.nav-links {
-  display: flex;
-  gap: 2rem;        /* space between nav links */
-}
-
-.nav-links a {
-  color: #fff;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.nav-links a:hover {
-  text-decoration: underline;
-}
-
-/* Main section */
-.cards-section {
-  padding: 2rem;
-}
-
-.cards-section h2 {
-  margin-bottom: 1.5rem;
-  color: #333;
-}
-
-/* Project cards */
+/* ===========================================================
+   Legacy card grid (project-grid / project-card)
+   (Kept for compatibility; dashboard now uses dashboard-*)
+   =========================================================== */
+.cards-section { padding: 2rem; }
+.cards-section h2 { margin-bottom: 1.5rem; color: #333; }
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
 }
-
 .project-card {
   background: #fff;
   border-radius: 8px;
@@ -53,28 +40,16 @@ body {
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   transition: transform 0.2s ease;
 }
+.project-card:hover { transform: translateY(-4px); }
+.project-card h3 { margin-top: 0; color: #111; }
+.project-card p { margin: 0.4rem 0; color: #444; }
 
-.project-card:hover {
-  transform: translateY(-4px);
-}
+/* ===========================================================
+   Dashboard look & feel (current)
+   =========================================================== */
+.dashboard-body { background: #f4f5f7; font-family: 'Segoe UI', Arial, sans-serif; }
 
-.project-card h3 {
-  margin-top: 0;
-  color: #111;
-}
-
-.project-card p {
-  margin: 0.4rem 0;
-  color: #444;
-}
-
-/* === Dashboard Enhancements (non-destructive) === */
-.dashboard-body {
-  background: #f4f5f7;
-  font-family: 'Segoe UI', Arial, sans-serif;
-}
-
-/* Top bar */
+/* Header bar */
 .dashboard-header {
   background: #11121f;
   color: #fff;
@@ -84,23 +59,12 @@ body {
   align-items: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
-
-.dashboard-header h1 {
-  font-size: 1.6rem;
-  margin: 0;
-}
+.dashboard-header h1 { font-size: 1.6rem; margin: 0; }
 
 .dashboard-nav a {
-  color: #fff;
-  margin-left: 2rem;
-  text-decoration: none;
-  font-weight: 500;
-  transition: color 0.2s ease;
+  color: #fff; margin-left: 2rem; text-decoration: none; font-weight: 500; transition: color 0.2s ease;
 }
-
-.dashboard-nav a:hover {
-  color: #4ec3ff;
-}
+.dashboard-nav a:hover { color: #4ec3ff; }
 
 /* Grid of project cards */
 .dashboard-grid {
@@ -109,7 +73,6 @@ body {
   gap: 1.5rem;
   padding: 2rem;
 }
-
 .dashboard-card {
   background: #fff;
   border-radius: 12px;
@@ -118,242 +81,79 @@ body {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
 }
+.dashboard-card:hover { transform: translateY(-4px); box-shadow: 0 6px 14px rgba(0,0,0,0.15); }
 
-.dashboard-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 14px rgba(0,0,0,0.15);
-}
-/* === Dashboard Header Updates === */
-.dashboard-header {
-  background-color: #064420;      /* dark green bar */
-  color: #fff;
-  padding: 1rem 2rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
+/* --- Alternative header palette (green theme) --- */
+.dashboard-header { background-color: #064420; color: #fff; }
+.dashboard-header h1 { font-size: 1.5rem; font-weight: bold; color: #fff; margin: 0; }
+.dashboard-nav { display: flex; gap: 1.5rem; align-items: center; }
+.dashboard-nav a { color: #fff; text-decoration: none; font-weight: 500; }
+.dashboard-nav a:hover { text-decoration: underline; }
 
-.dashboard-header h1 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #fff;                    /* ensure text stays white */
-  margin: 0;
-}
-
-.dashboard-nav {
-  display: flex;
-  gap: 1.5rem;
-  align-items: center;
-}
-
-.dashboard-nav a {
-  color: #fff;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.dashboard-nav a:hover {
-  text-decoration: underline;
-}
-
-/* Dropdown styles */
-.designer-dropdown {
-  position: relative;
-}
-
-.dropbtn {
-  background: none;
-  border: none;
-  color: #fff;
-  font-weight: 500;
-  cursor: pointer;
-  font-size: 1rem;
-}
-
-.dropbtn:hover {
-  text-decoration: underline;
-}
-
+/* Dropdown (By Designer) */
+.designer-dropdown { position: relative; }
+.dropbtn { background: none; border: none; color: #fff; font-weight: 500; cursor: pointer; font-size: 1rem; }
+.dropbtn:hover { text-decoration: underline; }
 .dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #fff;
-  min-width: 160px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-  z-index: 1;
+  display: none; position: absolute; background-color: #fff; min-width: 160px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2); z-index: 1;
 }
+.dropdown-content a { color: #064420; padding: 0.5rem 1rem; display: block; text-decoration: none; }
+.dropdown-content a:hover { background-color: #e6f0ea; }
+.designer-dropdown:hover .dropdown-content { display: block; }
 
-.dropdown-content a {
-  color: #064420;
-  padding: 0.5rem 1rem;
-  display: block;
-  text-decoration: none;
-}
-
-.dropdown-content a:hover {
-  background-color: #e6f0ea;
-}
-
-/* Show dropdown on hover */
-.designer-dropdown:hover .dropdown-content {
-  display: block;
-}
-
-/* --- Counters --- */
+/* Counters row */
 .dashboard-counters {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  padding: 1.5rem 0;
-  background: #f8f9fa;
+  display: flex; justify-content: center; gap: 2rem; padding: 1.5rem 0; background: #f8f9fa;
 }
 .counter {
-  background: #ffffff;
-  padding: 1rem 2rem;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: #ffffff; padding: 1rem 2rem; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-.counter h2 {
-  margin: 0;
-  color: #2d6a4f; /* matches the dark green theme */
-}
+.counter h2 { margin: 0; color: #2d6a4f; }
 
-/* --- Search + New Project --- */
-.dashboard-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin: 1rem 0;
-}
+/* Search + New Project controls */
+.dashboard-controls { display: flex; justify-content: center; align-items: center; gap: 1rem; margin: 1rem 0; }
 #searchInput {
-  padding: 0.5rem 0.8rem;
-  width: 240px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  padding: 0.5rem 0.8rem; width: 240px; border-radius: 4px; border: 1px solid #ccc;
 }
 #newProjectBtn {
-  background: #2d6a4f;
-  color: #fff;
-  border: none;
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: bold;
+  background: #2d6a4f; color: #fff; border: none; padding: 0.6rem 1rem; border-radius: 6px; cursor: pointer; font-weight: bold;
 }
-#newProjectBtn:hover {
-  background: #3c8d63;
-}
+#newProjectBtn:hover { background: #3c8d63; }
 
-.dashboard-counters {
-  display: flex;
-  justify-content: center;
-  gap: 2rem;
-  margin: 1.5rem 0;
-}
-
+/* Slightly bolder counters + interactions */
+.dashboard-counters { display: flex; justify-content: center; gap: 2rem; margin: 1.5rem 0; }
 .counter {
-  background: #ffffff;
-  padding: 1rem 2rem;
-  border-radius: 10px;
-  text-align: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-  transition: transform 0.2s;
+  background: #ffffff; padding: 1rem 2rem; border-radius: 10px; text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15); transition: transform 0.2s;
 }
-
-.counter h2 {
-  margin: 0;
-  font-size: 2rem;
-  color: #2e7d32;   /* deep green numbers */
-}
-
-.counter:hover {
-  transform: translateY(-3px);
-}
+.counter h2 { margin: 0; font-size: 2rem; color: #2e7d32; }
+.counter:hover { transform: translateY(-3px); }
 
 .dashboard-controls input {
-  padding: 0.7rem 1rem;
-  width: 280px;
-  border: 1px solid #ccc;
-  border-radius: 25px;
-  font-size: 1rem;
+  padding: 0.7rem 1rem; width: 280px; border: 1px solid #ccc; border-radius: 25px; font-size: 1rem;
 }
-
 .dashboard-controls button {
-  background: #388e3c;      /* brighter green */
-  color: #fff;
-  border: none;
-  padding: 0.7rem 1.5rem;
-  border-radius: 25px;
-  font-size: 1rem;
-  cursor: pointer;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  transition: background 0.2s, transform 0.2s;
+  background: #388e3c; color: #fff; border: none; padding: 0.7rem 1.5rem; border-radius: 25px; font-size: 1rem;
+  cursor: pointer; box-shadow: 0 2px 4px rgba(0,0,0,0.2); transition: background 0.2s, transform 0.2s;
 }
+.dashboard-controls button:hover { background: #2e7d32; transform: translateY(-2px); }
 
-.dashboard-controls button:hover {
-  background: #2e7d32;
-  transform: translateY(-2px);
-}
+/* Past Due counter gets a red tint */
+.counter.past-due { background: #ffe6e6; border: 1px solid #e57373; }
+.counter.past-due h2 { color: #d32f2f; }
 
-/* --- Past Due Counter --- */
-.counter.past-due {
-  background: #ffe6e6;       /* light red background */
-  border: 1px solid #e57373; /* subtle red border */
-}
-
-.counter.past-due h2 {
-  color: #d32f2f;            /* strong red number */
-}
-
-/* --- New Project Modal --- */
+/* Modal */
 .modal {
-  display: none; /* hidden by default */
-  position: fixed;
-  z-index: 1000;
-  left: 0; top: 0;
-  width: 100%; height: 100%;
+  display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
   background: rgba(0,0,0,0.4);
 }
-
 .modal-content {
-  background: #fff;
-  margin: 10% auto;
-  padding: 1.5rem;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 400px;
+  background: #fff; margin: 10% auto; padding: 1.5rem; border-radius: 8px; width: 90%; max-width: 400px;
   box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
-
-.close {
-  float: right;
-  font-size: 1.5rem;
-  cursor: pointer;
-}
-
-.save-btn {
-  display: block;
-  margin-top: 1rem;
-  padding: 0.6rem 1rem;
-  background: #28a745;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.save-btn:hover {
-  background: #218838;
-}
-
-#newProjectForm label {
-  display: block;
-  margin-top: 0.8rem;
-}
-#newProjectForm input,
-#newProjectForm select {
-  width: 100%;
-  padding: 0.4rem;
-  margin-top: 0.3rem;
-}
+.close { float: right; font-size: 1.5rem; cursor: pointer; }
+.save-btn { display: block; margin-top: 1rem; padding: 0.6rem 1rem; background: #28a745; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+.save-btn:hover { background: #218838; }
+#newProjectForm label { display: block; margin-top: 0.8rem; }
+#newProjectForm input, #newProjectForm select { width: 100%; padding: 0.4rem; margin-top: 0.3rem; }

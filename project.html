@@ -1,42 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Details</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- Simple top “navbar”: page title + back link -->
   <div class="navbar">
     <h1 id="projectTitle">Loading...</h1>
     <a href="index.html" class="nav-link">← Back to Dashboard</a>
   </div>
 
   <main class="project-details">
+    <!-- Project info panel (filled by project.js) -->
     <section id="projectInfo" class="info-card">
       <!-- Project info will load here -->
     </section>
 
+    <!-- Placeholder for future per-project tasks (not wired yet) -->
     <section class="tasks-section">
       <h2>Tasks</h2>
       <div id="taskList"></div>
     </section>
 
+    <!-- Actions that update the project’s status in Supabase -->
     <div class="actions">
       <button id="completeBtn">✅ Mark as Completed</button>
       <button id="abandonBtn">⚠️ Abandon Project</button>
     </div>
   </main>
 
-<script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-  window.supabase = createClient(
-    'https://cdrinxjwnzetcfvicwml.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY'
-  );
-</script>
+  <!-- Supabase client for this page (detail view uses it directly) -->
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    window.supabase = createClient(
+      'https://cdrinxjwnzetcfvicwml.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY'
+    );
+  </script>
 
-<script src="project.js"></script>
-
+  <!-- Detail page script: reads project by name param; updates status -->
+  <script type="module"></script>
+  <script src="project.js" defer></script>
 </body>
 </html>
