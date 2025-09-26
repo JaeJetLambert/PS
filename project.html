@@ -1,19 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Details</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1 id="project-name">Loading...</h1>
-  </header>
-  <main>
-    <p><strong>Designer:</strong> <span id="designer"></span></p>
-    <p><strong>Start Date:</strong> <span id="startDate"></span></p>
+  <div class="navbar">
+    <h1 id="projectTitle">Loading...</h1>
+    <a href="index.html" class="nav-link">← Back to Dashboard</a>
+  </div>
+
+  <main class="project-details">
+    <section id="projectInfo" class="info-card">
+      <!-- Project info will load here -->
+    </section>
+
+    <section class="tasks-section">
+      <h2>Tasks</h2>
+      <div id="taskList"></div>
+    </section>
+
+    <div class="actions">
+      <button id="completeBtn">✅ Mark as Completed</button>
+      <button id="abandonBtn">⚠️ Abandon Project</button>
+    </div>
   </main>
+
   <script src="project.js"></script>
 </body>
 </html>
