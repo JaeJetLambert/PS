@@ -2,44 +2,54 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Project Status Dashboard</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <h1>📊 Project Status Dashboard</h1>
-
-  <button id="addProjectBtn">➕ Add Project</button>
-  <div id="projectsContainer"></div>
-
-  <h2>✅ Completed Projects</h2>
-  <div id="completedContainer"></div>
-
-  <!-- Modal for adding project/line item -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-content">
-      <h3 id="modalTitle"></h3>
-      <label>
-        Name:
-        <input id="modalName" type="text">
-      </label>
-      <label id="startDateLabel" class="hidden">
-        Start Date:
-        <input id="modalStartDate" type="date">
-      </label>
-      <label id="dueDaysLabel" class="hidden">
-        Days to Complete:
-        <input id="modalDueDays" type="number" min="1" value="7">
-      </label>
-      <div class="modal-buttons">
-        <button id="modalSave">Save</button>
-        <button id="modalCancel">Cancel</button>
+  <!-- Navigation Bar -->
+  <header class="navbar">
+    <h1>Project Status</h1>
+    <nav>
+      <button class="nav-btn" id="navDashboard">Dashboard</button>
+      <button class="nav-btn" id="navActive">Active Projects</button>
+      <button class="nav-btn" id="navCompleted">Completed Projects</button>
+      <div class="dropdown">
+        <button class="nav-btn">By Designer ▾</button>
+        <div class="dropdown-content" id="designerDropdown">
+          <!-- Designers will be populated here -->
+        </div>
       </div>
+      <input type="text" id="searchInput" placeholder="Search projects..."/>
+    </nav>
+  </header>
+
+  <!-- Dashboard Counters -->
+  <section class="counters">
+    <div class="counter">
+      <h2 id="activeCount">0</h2>
+      <p>Active Projects</p>
     </div>
-  </div>
+    <div class="counter">
+      <h2 id="completedCount">0</h2>
+      <p>Completed This Year</p>
+    </div>
+    <div class="counter">
+      <h2 id="overdueCount">0</h2>
+      <p>Overdue Tasks</p>
+    </div>
+  </section>
+
+  <!-- New Project Button -->
+  <section class="actions">
+    <button id="newProjectBtn">+ New Project</button>
+  </section>
+
+  <!-- Projects Grid -->
+  <main id="projectGrid" class="project-grid">
+    <!-- Project cards will appear here -->
+  </main>
 
   <script src="app.js"></script>
 </body>
 </html>
-
-
