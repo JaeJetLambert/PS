@@ -110,7 +110,3 @@ function setupSearch() {
 updateCounters();
 setupSearch();
 
-// Temporary New Project action
-document.getElementById("newProjectBtn").addEventListener("click", () => {
-  alert("New Project form coming soon!");
-});
