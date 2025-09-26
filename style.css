@@ -297,3 +297,12 @@ body {
   transform: translateY(-2px);
 }
 
+/* --- Past Due Counter --- */
+.counter.past-due {
+  background: #ffe6e6;       /* light red background */
+  border: 1px solid #e57373; /* subtle red border */
+}
+
+.counter.past-due h2 {
+  color: #d32f2f;            /* strong red number */
+}
