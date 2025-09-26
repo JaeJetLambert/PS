@@ -1,18 +1,15 @@
+// Example projects (same as in app.js)
+const projects = [
+  { name: "Smith", designer: "Alice", startDate: "2025-09-01" },
+  { name: "Bach",  designer: "Bob",   startDate: "2025-09-15" }
+];
+
 // --- Load project name from query string ---
 const projectName = new URLSearchParams(window.location.search).get("name");
 const project = projects.find(p => p.name === projectName);
 
-// Dummy data for now (later this will come from storage)
-const projects = [
-  { name: "Smith", designer: "Alice", startDate: "2025-09-01" },
-  { name: "Bach", designer: "Bob", startDate: "2025-09-15" }
-];
-
-// Find the project
-const project = projects.find(p => p.name === projectName);
-
 const title = document.getElementById("projectTitle");
-const info = document.getElementById("projectInfo");
+const info  = document.getElementById("projectInfo");
 
 if (project) {
   title.textContent = project.name;
@@ -33,4 +30,3 @@ document.getElementById("abandonBtn").addEventListener("click", () => {
   const reason = prompt("Why is this project abandoned?");
   if (reason) alert("Abandoned with reason: " + reason);
 });
-
