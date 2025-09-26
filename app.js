@@ -121,3 +121,47 @@ function renderProjects() {
     });
 }
 renderProjects();
+const projects = [
+  {
+    name: "Smith",
+    designer: "Sarah",
+    tasks: [
+      { name: "Client Initial Contact", status: "Not Started" },
+      { name: "Send Process Document", status: "Not Started" },
+      { name: "Schedule Initial Consultation", status: "In Progress" }
+    ]
+  },
+  {
+    name: "Bach",
+    designer: "Darby",
+    tasks: [
+      { name: "Client Initial Contact", status: "Completed" },
+      { name: "Send Process Document", status: "Not Started" },
+      { name: "Schedule Initial Consultation", status: "Not Started" }
+    ]
+  }
+];
+
+function renderProjects() {
+  const grid = document.querySelector(".project-grid");
+  grid.innerHTML = "";
+  projects
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(project => {
+      const nextTasks = project.tasks
+        .slice(0, 2)
+        .map(t => `<li>${t.name} – <strong>${t.status}</strong></li>`)
+        .join("");
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h3>${project.name}</h3>
+        <p><strong>Designer:</strong> ${project.designer}</p>
+        <ul>${nextTasks}</ul>
+        <button class="view-btn" data-name="${project.name}">View Details</button>
+      `;
+      grid.appendChild(card);
+    });
+}
+
+renderProjects();
