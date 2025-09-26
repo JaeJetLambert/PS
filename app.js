@@ -5,17 +5,15 @@ const projects = [
 ];
 
 function renderProjects() {
-  const grid = document.querySelector(".project-grid");
+  const grid = document.getElementById("projectGrid");
   grid.innerHTML = projects.map((p, i) => `
-  <div class="project-card"
-       onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
-    <h3>${p.name}</h3>
-    <p><strong>Designer:</strong> ${p.designer}</p>
-    <p><strong>Start Date:</strong> ${p.startDate}</p>
-  </div>
-`).join("");
-
-
+    <div class="dashboard-card"
+         onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+      <h3>${p.name}</h3>
+      <p><strong>Designer:</strong> ${p.designer}</p>
+      <p><strong>Start Date:</strong> ${p.startDate}</p>
+    </div>
+  `).join("");
 }
 
 renderProjects();

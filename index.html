@@ -6,10 +6,10 @@
   <title>Project Status Dashboard</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <header class="topbar">
+<body class="dashboard-body">
+  <header class="dashboard-header">
     <h1>Project Status Dashboard</h1>
-    <nav class="nav-links">
+    <nav class="dashboard-nav">
       <a href="#">Home</a>
       <a href="#">Reports</a>
       <a href="#">Settings</a>
@@ -17,9 +17,9 @@
   </header>
 
   <main>
-    <section class="cards-section">
-      <h2>Active Projects</h2>
-      <div class="project-grid"></div>
+    <section>
+      <h2 style="padding:1.5rem 2rem 0;">Active Projects</h2>
+      <div class="dashboard-grid" id="projectGrid"></div>
     </section>
   </main>
 

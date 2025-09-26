@@ -67,3 +67,59 @@ body {
   margin: 0.4rem 0;
   color: #444;
 }
+
+/* === Dashboard Enhancements (non-destructive) === */
+.dashboard-body {
+  background: #f4f5f7;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+/* Top bar */
+.dashboard-header {
+  background: #11121f;
+  color: #fff;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.dashboard-header h1 {
+  font-size: 1.6rem;
+  margin: 0;
+}
+
+.dashboard-nav a {
+  color: #fff;
+  margin-left: 2rem;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.dashboard-nav a:hover {
+  color: #4ec3ff;
+}
+
+/* Grid of project cards */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
+}
+
+.dashboard-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 1.2rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+}
