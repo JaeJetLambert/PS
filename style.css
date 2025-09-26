@@ -245,3 +245,55 @@ body {
 #newProjectBtn:hover {
   background: #3c8d63;
 }
+
+.dashboard-counters {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin: 1.5rem 0;
+}
+
+.counter {
+  background: #ffffff;
+  padding: 1rem 2rem;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: transform 0.2s;
+}
+
+.counter h2 {
+  margin: 0;
+  font-size: 2rem;
+  color: #2e7d32;   /* deep green numbers */
+}
+
+.counter:hover {
+  transform: translateY(-3px);
+}
+
+.dashboard-controls input {
+  padding: 0.7rem 1rem;
+  width: 280px;
+  border: 1px solid #ccc;
+  border-radius: 25px;
+  font-size: 1rem;
+}
+
+.dashboard-controls button {
+  background: #388e3c;      /* brighter green */
+  color: #fff;
+  border: none;
+  padding: 0.7rem 1.5rem;
+  border-radius: 25px;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: background 0.2s, transform 0.2s;
+}
+
+.dashboard-controls button:hover {
+  background: #2e7d32;
+  transform: translateY(-2px);
+}
+
