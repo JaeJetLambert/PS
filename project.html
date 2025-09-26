@@ -28,6 +28,15 @@
     </div>
   </main>
 
-  <script src="project.js"></script>
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+  window.supabase = createClient(
+    'https://cdrinxjwnzetcfvicwml.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY'
+  );
+</script>
+
+<script src="project.js"></script>
+
 </body>
 </html>

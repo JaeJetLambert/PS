@@ -1,23 +1,37 @@
-// --- State + persistence ---
-const STORAGE_KEY = "projects";
+// --- DB Client (provided by index.html) ---
+const db = window.supabase;
 
-function loadProjects() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) return parsed;
-  } catch (_) {}
-  // Defaults if nothing in storage
-  return [
-    { name: "Smith", designer: "Alice", startDate: "2025-09-01", status: "active" },
-    { name: "Bach",  designer: "Bob",   startDate: "2025-09-15", status: "active" }
-  ];
+// In-memory cache populated from DB
+let projects = [];
+
+// DB helpers
+async function dbLoadProjects() {
+  const { data, error } = await db
+    .from('projects')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data.map(r => ({
+    id: r.id,
+    name: r.name,
+    designer: r.designer,
+    type: r.type,
+    startDate: r.start_date ?? '',
+    status: r.status ?? 'active',
+    abandon_reason: r.abandon_reason ?? null,
+    created_at: r.created_at
+  }));
 }
 
-let projects = loadProjects();
-
-function saveProjects() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+async function dbInsertProject(p) {
+  const { error } = await db.from('projects').insert({
+    name: p.name,
+    designer: p.designer,
+    type: p.type,
+    start_date: p.startDate,
+    status: p.status ?? 'active'
+  });
+  if (error) throw error;
 }
 
 function renderProjects() {
@@ -32,7 +46,18 @@ function renderProjects() {
   `).join("");
 }
 
-renderProjects();
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    projects = await dbLoadProjects();
+  } catch (e) {
+    console.error('Failed to load from DB:', e);
+    projects = [];
+  }
+  renderProjects(projects);
+  updateCounters();
+  setupSearch();
+});
+
 // --- existing dashboard code remains above ---
 
 // --- New Project Modal Logic ---
@@ -53,49 +78,46 @@ window.addEventListener("click", e => {
   if (e.target === modal) modal.style.display = "none";
 });
 
-form.addEventListener("submit", e => {
+form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const newProj = {
-  name: document.getElementById("projectNameInput").value.trim(),
-  designer: document.getElementById("designerSelect").value,
-  type: document.getElementById("projectType").value,
-  startDate: document.getElementById("startDateInput").value,
-  status: "active"
+    name: document.getElementById('projectNameInput').value.trim(),
+    designer: document.getElementById('designerSelect').value,
+    type: document.getElementById('projectType').value,
+    startDate: document.getElementById('startDateInput').value,
+    status: 'active'
   };
   if (!newProj.name) return;
 
-  projects.push(newProj);
-  saveProjects();
-  renderProjects();
-  updateCounters();        // if you already have this function
-  modal.style.display = "none";
-  form.reset();
+  try {
+    await dbInsertProject(newProj);
+    projects = await dbLoadProjects();   // refresh from DB
+    renderProjects(projects);
+    updateCounters();
+    modal.style.display = 'none';
+    form.reset();
+  } catch (err) {
+    alert('Could not save project: ' + err.message);
+    console.error(err);
+  }
 });
-
-// If this is the detail page, call it
-if (document.querySelector("#project-detail")) {
-  loadProjectDetail();
-}
 
 // --- Counters + Search functionality ---
 function updateCounters() {
-  const active = projects.filter(p => p.status !== "completed" && p.status !== "abandoned").length;
-  const completed = projects.filter(p => p.status === "completed").length;
-
-  // Define "past due" however you want later; placeholder 0 for now:
-  const pastDue = 0;
-
-  document.getElementById("activeCounter").querySelector("h2").textContent = active;
-  document.getElementById("completedCounter").querySelector("h2").textContent = completed;
-  document.getElementById("pastDueCounter").querySelector("h2").textContent = pastDue;
+  const active    = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned').length;
+  const completed = projects.filter(p => p.status === 'completed').length;
+  const pastDue   = 0; // define later
+  document.getElementById('activeCounter').querySelector('h2').textContent = active;
+  document.getElementById('completedCounter').querySelector('h2').textContent = completed;
+  document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
 }
 
 function setupSearch() {
-  const input = document.getElementById("searchInput");
-  input.addEventListener("input", () => {
+  const input = document.getElementById('searchInput');
+  input.addEventListener('input', () => {
     const term = input.value.toLowerCase();
     const filtered = projects.filter(p => p.name.toLowerCase().includes(term));
-    renderProjects(filtered); // reuse the same clickable card template
+    renderProjects(filtered);
   });
 }
 
