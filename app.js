@@ -1,8 +1,13 @@
-// Example projects (static for now)
-const projects = [
+// Load projects from localStorage or start with defaults
+let projects = JSON.parse(localStorage.getItem("projects")) || [];
   { name: "Smith", designer: "Alice", startDate: "2025-09-01" },
   { name: "Bach",  designer: "Bob",   startDate: "2025-09-15" }
 ];
+
+// Save to localStorage anytime the list changes
+function saveProjects() {
+  localStorage.setItem("projects", JSON.stringify(projects));
+}
 
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
@@ -48,6 +53,7 @@ form.addEventListener("submit", e => {
   if (!newProj.name) return;
 
   projects.push(newProj);
+  saveProjects();
   renderProjects();
   updateCounters();        // if you already have this function
   modal.style.display = "none";
@@ -92,7 +98,7 @@ function updateCounters() {
 function setupSearch() {
   const input = document.getElementById("searchInput");
   input.addEventListener("input", () => {
-    const term = input.value.toLowerCase();
+   const term = input.value.toLowerCase();
     const grid = document.getElementById("projectGrid");
     grid.innerHTML = projects
       .filter(p => p.name.toLowerCase().includes(term))
