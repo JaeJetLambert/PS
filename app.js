@@ -1,12 +1,23 @@
-// Load projects from localStorage or start with defaults
-let projects = JSON.parse(localStorage.getItem("projects")) || [];
-  { name: "Smith", designer: "Alice", startDate: "2025-09-01" },
-  { name: "Bach",  designer: "Bob",   startDate: "2025-09-15" }
-];
+// --- State + persistence ---
+const STORAGE_KEY = "projects";
 
-// Save to localStorage anytime the list changes
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+  } catch (_) {}
+  // Defaults if nothing in storage
+  return [
+    { name: "Smith", designer: "Alice", startDate: "2025-09-01", status: "active" },
+    { name: "Bach",  designer: "Bob",   startDate: "2025-09-15", status: "active" }
+  ];
+}
+
+let projects = loadProjects();
+
 function saveProjects() {
-  localStorage.setItem("projects", JSON.stringify(projects));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
 }
 
 function renderProjects() {
@@ -45,10 +56,11 @@ window.addEventListener("click", e => {
 form.addEventListener("submit", e => {
   e.preventDefault();
   const newProj = {
-    name: document.getElementById("projectNameInput").value.trim(),
-    designer: document.getElementById("designerSelect").value,
-    type: document.getElementById("projectType").value,
-    startDate: document.getElementById("startDateInput").value
+  name: document.getElementById("projectNameInput").value.trim(),
+  designer: document.getElementById("designerSelect").value,
+  type: document.getElementById("projectType").value,
+  startDate: document.getElementById("startDateInput").value,
+  status: "active"
   };
   if (!newProj.name) return;
 
@@ -60,26 +72,6 @@ form.addEventListener("submit", e => {
   form.reset();
 });
 
-
-// --- Project Detail Page Logic (NEW) ---
-function loadProjectDetail() {
-  const projectName = new URLSearchParams(window.location.search).get("name");
-  const project = projects.find(p => p.name === projectName);
-  if (!project) return;
-
-  const container = document.querySelector("#project-detail");
-  container.innerHTML = `
-    <h2>${project.name}</h2>
-    <p><strong>Designer:</strong> ${project.designer}</p>
-    <p><strong>Start Date:</strong> ${project.startDate}</p>
-    <button id="mark-complete">Mark Completed</button>
-  `;
-
-  document.querySelector("#mark-complete").addEventListener("click", () => {
-    alert(`${project.name} marked completed!`);
-  });
-}
-
 // If this is the detail page, call it
 if (document.querySelector("#project-detail")) {
   loadProjectDetail();
@@ -87,9 +79,12 @@ if (document.querySelector("#project-detail")) {
 
 // --- Counters + Search functionality ---
 function updateCounters() {
-  const active = projects.length; // placeholder: all are active
-  const completed = 0;            // placeholder: none completed yet
-  const pastDue = 0;               // placeholder
+  const active = projects.filter(p => p.status !== "completed" && p.status !== "abandoned").length;
+  const completed = projects.filter(p => p.status === "completed").length;
+
+  // Define "past due" however you want later; placeholder 0 for now:
+  const pastDue = 0;
+
   document.getElementById("activeCounter").querySelector("h2").textContent = active;
   document.getElementById("completedCounter").querySelector("h2").textContent = completed;
   document.getElementById("pastDueCounter").querySelector("h2").textContent = pastDue;
@@ -98,17 +93,9 @@ function updateCounters() {
 function setupSearch() {
   const input = document.getElementById("searchInput");
   input.addEventListener("input", () => {
-   const term = input.value.toLowerCase();
-    const grid = document.getElementById("projectGrid");
-    grid.innerHTML = projects
-      .filter(p => p.name.toLowerCase().includes(term))
-      .map(p => `
-        <div class="project-card">
-          <h3>${p.name}</h3>
-          <p><strong>Designer:</strong> ${p.designer}</p>
-          <p><strong>Start Date:</strong> ${p.startDate}</p>
-        </div>
-      `).join("");
+    const term = input.value.toLowerCase();
+    const filtered = projects.filter(p => p.name.toLowerCase().includes(term));
+    renderProjects(filtered); // reuse the same clickable card template
   });
 }
 
