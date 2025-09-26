@@ -1,4 +1,4 @@
-// Simple hard-coded projects for testing
+// Example projects (static for now)
 const projects = [
   { name: "Smith", designer: "Alice", startDate: "2025-09-01" },
   { name: "Bach",  designer: "Bob",   startDate: "2025-09-15" }
