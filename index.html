@@ -7,48 +7,48 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-  <!-- Navigation Bar -->
+  <!-- Top Navigation -->
   <header class="navbar">
-    <h1>Project Status</h1>
-    <nav>
-      <button class="nav-btn" id="navDashboard">Dashboard</button>
-      <button class="nav-btn" id="navActive">Active Projects</button>
-      <button class="nav-btn" id="navCompleted">Completed Projects</button>
+    <div class="logo">Project Status</div>
+    <nav class="nav-links">
+      <a href="#" class="nav-link active" data-page="dashboard">Dashboard</a>
+      <a href="#" class="nav-link" data-page="active">Active Projects</a>
+      <a href="#" class="nav-link" data-page="completed">Completed Projects</a>
       <div class="dropdown">
-        <button class="nav-btn">By Designer ▾</button>
-        <div class="dropdown-content" id="designerDropdown">
-          <!-- Designers will be populated here -->
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content" id="designer-dropdown">
+          <!-- Designer names will be populated here -->
         </div>
       </div>
-      <input type="text" id="searchInput" placeholder="Search projects..."/>
     </nav>
   </header>
 
   <!-- Dashboard Counters -->
-  <section class="counters">
+  <section class="dashboard-counters">
     <div class="counter">
       <h2 id="activeCount">0</h2>
       <p>Active Projects</p>
     </div>
     <div class="counter">
       <h2 id="completedCount">0</h2>
-      <p>Completed This Year</p>
+      <p>Completed (This Year)</p>
     </div>
-    <div class="counter">
+    <div class="counter overdue">
       <h2 id="overdueCount">0</h2>
       <p>Overdue Tasks</p>
     </div>
   </section>
 
-  <!-- New Project Button -->
-  <section class="actions">
+  <!-- Search + New Project Button -->
+  <section class="dashboard-controls">
+    <input type="text" id="searchInput" placeholder="Search projects...">
     <button id="newProjectBtn">+ New Project</button>
   </section>
 
-  <!-- Projects Grid -->
-  <main id="projectGrid" class="project-grid">
-    <!-- Project cards will appear here -->
-  </main>
+  <!-- Project Snapshots -->
+  <section class="project-grid" id="projectGrid">
+    <!-- Cards will be rendered here by app.js -->
+  </section>
 
   <script src="app.js"></script>
 </body>

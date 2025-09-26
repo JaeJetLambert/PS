@@ -112,3 +112,123 @@ body {
 .project-card h3 {
   margin-top: 0;
 }
+body {
+  font-family: Arial, sans-serif;
+  background: #f8f9fa;
+  margin: 0;
+  padding: 0;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #2c3e50;
+  padding: 0.8rem 1.5rem;
+  color: #fff;
+}
+
+.logo {
+  font-size: 1.4rem;
+  font-weight: bold;
+}
+
+.nav-links {
+  display: flex;
+  gap: 1rem;
+}
+
+.nav-link {
+  color: #fff;
+  text-decoration: none;
+}
+
+.nav-link.active {
+  border-bottom: 2px solid #fff;
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropbtn {
+  background: #34495e;
+  color: white;
+  border: none;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+}
+
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #ffffff;
+  min-width: 160px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+  z-index: 1;
+}
+
+.dropdown-content a {
+  color: #333;
+  padding: 0.5rem;
+  display: block;
+  text-decoration: none;
+}
+
+.dropdown:hover .dropdown-content {
+  display: block;
+}
+
+.dashboard-counters {
+  display: flex;
+  justify-content: center;
+  gap: 2rem;
+  margin: 1.5rem 0;
+}
+
+.counter {
+  background: #fff;
+  padding: 1rem 2rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.counter.overdue {
+  background: #ffe6e6;
+}
+
+.dashboard-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.dashboard-controls input {
+  padding: 0.5rem;
+  width: 250px;
+}
+
+.dashboard-controls button {
+  background: #3498db;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 0 1rem 2rem;
+}
+
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
