@@ -43,3 +43,39 @@ function loadProjectDetail() {
 if (document.querySelector("#project-detail")) {
   loadProjectDetail();
 }
+
+// --- Counters + Search functionality ---
+function updateCounters() {
+  const active = projects.length; // placeholder: all are active
+  const completed = 0;            // placeholder: none completed yet
+  const pastDue = 0;               // placeholder
+  document.getElementById("activeCounter").querySelector("h2").textContent = active;
+  document.getElementById("completedCounter").querySelector("h2").textContent = completed;
+  document.getElementById("pastDueCounter").querySelector("h2").textContent = pastDue;
+}
+
+function setupSearch() {
+  const input = document.getElementById("searchInput");
+  input.addEventListener("input", () => {
+    const term = input.value.toLowerCase();
+    const grid = document.getElementById("projectGrid");
+    grid.innerHTML = projects
+      .filter(p => p.name.toLowerCase().includes(term))
+      .map(p => `
+        <div class="project-card">
+          <h3>${p.name}</h3>
+          <p><strong>Designer:</strong> ${p.designer}</p>
+          <p><strong>Start Date:</strong> ${p.startDate}</p>
+        </div>
+      `).join("");
+  });
+}
+
+// Call them on load
+updateCounters();
+setupSearch();
+
+// Temporary New Project action
+document.getElementById("newProjectBtn").addEventListener("click", () => {
+  alert("New Project form coming soon!");
+});

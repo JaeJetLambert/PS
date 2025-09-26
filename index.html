@@ -24,9 +24,32 @@
   </nav>
 </header>
 
-  <main>
+    <main>
+    <!-- Top counters -->
+    <section class="dashboard-counters">
+      <div class="counter" id="activeCounter">
+        <h2>0</h2>
+        <p>Active</p>
+      </div>
+      <div class="counter" id="completedCounter">
+        <h2>0</h2>
+        <p>Completed (This Year)</p>
+      </div>
+      <div class="counter" id="pastDueCounter">
+        <h2>0</h2>
+        <p>Past Due</p>
+      </div>
+    </section>
+
+    <!-- Search + New Project controls -->
+    <section class="dashboard-controls">
+      <input type="text" id="searchInput" placeholder="Search projects...">
+      <button id="newProjectBtn">+ New Project</button>
+    </section>
+
+    <!-- Project Grid -->
     <section>
-      <h2 style="padding:1.5rem 2rem 0;">Active Projects</h2>
+      <h2 style="padding:1rem 2rem 0;">Active Projects</h2>
       <div class="dashboard-grid" id="projectGrid"></div>
     </section>
   </main>
