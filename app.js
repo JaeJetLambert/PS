@@ -6,13 +6,16 @@ const projects = [
 
 function renderProjects() {
   const grid = document.querySelector(".project-grid");
-  grid.innerHTML = projects.map(p => `
-    <div class="project-card">
-      <h3>${p.name}</h3>
-      <p><strong>Designer:</strong> ${p.designer}</p>
-      <p><strong>Start Date:</strong> ${p.startDate}</p>
-    </div>
-  `).join("");
+  grid.innerHTML = projects.map((p, i) => `
+  <div class="project-card"
+       onclick="window.location.href='project.html?project=${i}'">
+    <h3>${p.name}</h3>
+    <p><strong>Designer:</strong> ${p.designer}</p>
+    <p><strong>Start Date:</strong> ${p.startDate}</p>
+  </div>
+`).join("");
+
+
 }
 
 renderProjects();
