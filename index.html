@@ -3,65 +3,53 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Project Status Dashboard</title>
-  <link rel="stylesheet" href="style.css?v=10"/>
+  <title>Project Status Tracker</title>
+  <link rel="stylesheet" href="style.css?v=1">
 </head>
 <body>
-  <!-- HEADER / NAVIGATION -->
+  <!-- NAVBAR -->
   <header class="navbar">
     <div class="logo">Project Status Tracker</div>
-    <nav class="nav-links">
-      <a href="#" class="nav-link active">Dashboard</a>
-      <a href="#" class="nav-link">Active Projects</a>
-      <a href="#" class="nav-link">Completed Projects</a>
-
-      <!-- By Designer Dropdown -->
-      <div class="dropdown">
+    <ul class="nav-links">
+      <li><a href="#" class="nav-link active">Dashboard</a></li>
+      <li><a href="#" class="nav-link">Active Projects</a></li>
+      <li><a href="#" class="nav-link">Completed Projects</a></li>
+      <li class="dropdown">
         <button class="dropbtn">By Designer ▾</button>
-        <div class="dropdown-content">
-          <a href="#">Sarah</a>
-          <a href="#">Darby</a>
-          <a href="#">Adaline</a>
-        </div>
-      </div>
-
-      <!-- Search Bar -->
-      <input type="text" class="search-input" placeholder="Search projects…">
-    </nav>
+        <div class="dropdown-content" id="designerFilter"></div>
+      </li>
+      <li>
+        <input type="text" id="searchInput" placeholder="Search projects...">
+      </li>
+    </ul>
   </header>
 
-  <!-- DASHBOARD STATS -->
-  <section class="stats-bar">
-    <div class="stat-card">
-      <h2 id="active-count">0</h2>
+  <!-- COUNTERS -->
+  <section class="dashboard-counters">
+    <div class="counter">
+      <h2 id="activeCount">0</h2>
       <p>Active Projects</p>
     </div>
-    <div class="stat-card">
-      <h2 id="completed-count">0</h2>
-      <p>Completed Projects (This Year)</p>
+    <div class="counter">
+      <h2 id="completedCount">0</h2>
+      <p>Completed (This Year)</p>
     </div>
-    <div class="stat-card overdue">
-      <h2 id="overdue-count">0</h2>
-      <p>Overdue Tasks</p>
+    <div class="counter overdue">
+      <h2 id="overdueCount">0</h2>
+      <p>Overdue</p>
     </div>
-    <button class="new-project-btn">+ New Project</button>
   </section>
 
-  <!-- PROJECTS GRID -->
-  <main class="projects-grid" id="projects-container">
-    <!-- Example project card -->
-    <div class="project-card">
-      <h3 class="project-title">Example Project</h3>
-      <p class="project-designer">Designer: Sarah</p>
-      <ul class="task-preview">
-        <li>Task 1 – <span class="status">In Progress</span></li>
-        <li>Task 2 – <span class="status">Not Started</span></li>
-      </ul>
-    </div>
-    <!-- New project cards will be inserted here by JavaScript -->
+  <!-- CONTROLS -->
+  <section class="dashboard-controls">
+    <button id="newProjectBtn">+ New Project</button>
+  </section>
+
+  <!-- PROJECT GRID -->
+  <main class="project-grid" id="projectGrid">
+    <!-- Project cards will be injected by app.js -->
   </main>
 
-  <!-- Link to your script -->
-  <script src="app.js"></script>
+  <script src="app.js?v=1"></script>
 </body>
 </html>

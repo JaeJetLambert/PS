@@ -1,43 +1,83 @@
-// Temporary demo data so you can see layout
+// Demo data
 const projects = [
   {
-    name: "Alpha Project",
+    name: "Example Project",
     designer: "Sarah",
-    currentTasks: ["Initial Contact", "Send Process Document"],
-    nextTasks: ["Schedule Initial Consultation"]
-  },
-  {
-    name: "Beta Build",
-    designer: "Darby",
-    currentTasks: ["Prepare Client Dossier"],
-    nextTasks: ["Have Initial Consultation"]
+    tasks: [
+      { title: "Task 1", status: "In Progress" },
+      { title: "Task 2", status: "Not Started" }
+    ],
+    completed: false,
+    overdue: false
   }
 ];
 
-function renderDashboard() {
-  // Update counters
-  document.getElementById('activeCount').textContent = projects.length;
-  document.getElementById('completedCount').textContent = 0; // placeholder
-  document.getElementById('overdueCount').textContent = 0; // placeholder
+const grid = document.getElementById('projectGrid');
+const activeCount = document.getElementById('activeCount');
+const completedCount = document.getElementById('completedCount');
+const overdueCount = document.getElementById('overdueCount');
+const designerFilter = document.getElementById('designerFilter');
+const searchInput = document.getElementById('searchInput');
 
-  // Designer dropdown
-  const designers = [...new Set(projects.map(p => p.designer))].sort();
-  const dd = document.getElementById('designer-dropdown');
-  dd.innerHTML = designers.map(d => `<a href="#">${d}</a>`).join('');
-
-  // Project cards
-  const grid = document.getElementById('projectGrid');
-  grid.innerHTML = projects
-    .sort((a,b) => a.name.localeCompare(b.name))
-    .map(p => `
-      <div class="card">
-        <h3>${p.name}</h3>
-        <p><strong>Designer:</strong> ${p.designer}</p>
-        <p><strong>Current:</strong> ${p.currentTasks.join(', ')}</p>
-        <p><strong>Next:</strong> ${p.nextTasks.join(', ')}</p>
-      </div>
-    `).join('');
+// Render counters
+function updateCounters() {
+  const active = projects.filter(p => !p.completed).length;
+  const completed = projects.filter(p => p.completed).length;
+  const overdue = projects.filter(p => p.overdue).length;
+  activeCount.textContent = active;
+  completedCount.textContent = completed;
+  overdueCount.textContent = overdue;
 }
 
-document.addEventListener('DOMContentLoaded', renderDashboard);
+// Render projects
+function renderProjects(filter = "", designer = "") {
+  grid.innerHTML = "";
+  projects
+    .filter(p => p.name.toLowerCase().includes(filter.toLowerCase()))
+    .filter(p => !designer || p.designer === designer)
+    .forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <h3>${p.name}</h3>
+        <p><strong>Designer:</strong> ${p.designer}</p>
+        <ul>
+          ${p.tasks.map(t => `<li>${t.title} – ${t.status}</li>`).join("")}
+        </ul>
+      `;
+      grid.appendChild(card);
+    });
+}
 
+// Populate designer filter
+function populateDesignerFilter() {
+  const designers = [...new Set(projects.map(p => p.designer))];
+  designerFilter.innerHTML = designers
+    .map(d => `<button onclick="renderProjects(searchInput.value, '${d}')">${d}</button>`)
+    .join("");
+}
+
+// Event listeners
+searchInput.addEventListener('input', () => {
+  renderProjects(searchInput.value);
+});
+
+document.getElementById('newProjectBtn').addEventListener('click', () => {
+  const name = prompt("Enter project name:");
+  if (!name) return;
+  projects.push({
+    name,
+    designer: "Unassigned",
+    tasks: [],
+    completed: false,
+    overdue: false
+  });
+  updateCounters();
+  populateDesignerFilter();
+  renderProjects(searchInput.value);
+});
+
+// Initial render
+updateCounters();
+populateDesignerFilter();
+renderProjects();

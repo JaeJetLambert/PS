@@ -1,124 +1,12 @@
+/* GLOBAL */
 body {
+  margin: 0;
   font-family: Arial, sans-serif;
-  margin: 0;
-  background: #f8f9fa;
+  background: #f4f6f8;
+  color: #333;
 }
 
-/* Navigation */
-.navbar {
-  background: #343a40;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 1rem;
-  justify-content: space-between;
-}
-.navbar h1 {
-  margin: 0;
-  font-size: 1.2rem;
-}
-.navbar nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.nav-btn {
-  background: #495057;
-  border: none;
-  color: #fff;
-  padding: 0.4rem 0.8rem;
-  cursor: pointer;
-  border-radius: 4px;
-}
-.nav-btn:hover {
-  background: #6c757d;
-}
-#searchInput {
-  padding: 0.4rem;
-  border-radius: 4px;
-  border: 1px solid #ccc;
-}
-
-/* Dropdown */
-.dropdown {
-  position: relative;
-  display: inline-block;
-}
-.dropdown-content {
-  display: none;
-  position: absolute;
-  background-color: #fff;
-  min-width: 140px;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
-  z-index: 1;
-}
-.dropdown-content button {
-  width: 100%;
-  border: none;
-  background: #fff;
-  padding: 0.5rem;
-  text-align: left;
-  cursor: pointer;
-}
-.dropdown-content button:hover {
-  background: #e9ecef;
-}
-.dropdown:hover .dropdown-content {
-  display: block;
-}
-
-/* Counters */
-.counters {
-  display: flex;
-  justify-content: space-around;
-  padding: 1rem;
-  background: #fff;
-}
-.counter h2 {
-  margin: 0;
-  color: #007bff;
-}
-
-/* Actions */
-.actions {
-  text-align: center;
-  margin: 1rem 0;
-}
-.actions button {
-  padding: 0.6rem 1.2rem;
-  background: #007bff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-.actions button:hover {
-  background: #0056b3;
-}
-
-/* Project Grid */
-.project-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
-}
-.project-card {
-  background: #fff;
-  border-radius: 6px;
-  padding: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-.project-card h3 {
-  margin-top: 0;
-}
-body {
-  font-family: Arial, sans-serif;
-  background: #f8f9fa;
-  margin: 0;
-  padding: 0;
-}
-
+/* NAVBAR */
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -127,65 +15,70 @@ body {
   padding: 0.8rem 1.5rem;
   color: #fff;
 }
-
 .logo {
   font-size: 1.4rem;
   font-weight: bold;
 }
-
 .nav-links {
   display: flex;
-  gap: 3rem;
+  gap: 2rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-
 .nav-link {
   color: #fff;
   text-decoration: none;
+  font-weight: 500;
 }
-
+.nav-link:hover,
 .nav-link.active {
   border-bottom: 2px solid #fff;
 }
-
-.dropdown {
-  position: relative;
-}
-
 .dropbtn {
   background: #34495e;
-  color: white;
+  color: #fff;
   border: none;
   padding: 0.4rem 0.8rem;
   cursor: pointer;
+  border-radius: 4px;
 }
-
 .dropdown-content {
   display: none;
   position: absolute;
-  background-color: #ffffff;
+  background: #fff;
   min-width: 160px;
   box-shadow: 0 4px 8px rgba(0,0,0,0.2);
   z-index: 1;
 }
-
-.dropdown-content a {
-  color: #333;
+.dropdown-content button {
+  width: 100%;
+  background: none;
+  border: none;
   padding: 0.5rem;
-  display: block;
-  text-decoration: none;
+  text-align: left;
+  cursor: pointer;
 }
-
+.dropdown-content button:hover {
+  background: #eee;
+}
 .dropdown:hover .dropdown-content {
   display: block;
 }
+#searchInput {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
 
+/* COUNTERS */
 .dashboard-counters {
   display: flex;
   justify-content: center;
   gap: 2rem;
   margin: 1.5rem 0;
+  flex-wrap: wrap;
 }
-
 .counter {
   background: #fff;
   padding: 1rem 2rem;
@@ -193,62 +86,44 @@ body {
   text-align: center;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-
 .counter.overdue {
   background: #ffe6e6;
 }
+.counter h2 {
+  margin: 0;
+  color: #3498db;
+}
 
+/* CONTROLS */
 .dashboard-controls {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
+  text-align: center;
   margin-bottom: 1.5rem;
 }
-
-.dashboard-controls input {
-  padding: 0.5rem;
-  width: 250px;
-}
-
 .dashboard-controls button {
+  padding: 0.6rem 1.2rem;
   background: #3498db;
   color: #fff;
   border: none;
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
 }
+.dashboard-controls button:hover {
+  background: #2980b9;
+}
 
+/* PROJECT GRID */
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 1rem;
   padding: 0 1rem 2rem;
 }
-
 .card {
   background: #fff;
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
-/* --- NAV BAR LAYOUT --- */
-.nav-links {
-  display: flex;
-  justify-content: flex-end;   /* keep links on the right */
-  align-items: center;
-  gap: 2.5rem;                  /* <— increase spacing between items */
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.nav-links a {
-  color: #fff;
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.nav-links a:hover {
-  text-decoration: underline;
+.card h3 {
+  margin-top: 0;
 }
