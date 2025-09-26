@@ -127,3 +127,35 @@ body {
 .card h3 {
   margin-top: 0;
 }
+/* --- Project Cards --- */
+.project-card {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border: 1px solid #ddd;
+}
+
+.project-card h3 {
+  margin-top: 0;
+}
+
+.project-card p {
+  margin: 0.25rem 0;
+}
+/* --- Project Cards --- */
+.project-card {
+  background: #ffffff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.project-card h3 {
+  margin-top: 0;
+}
+
+.project-card p {
+  margin: 0.25rem 0;
+}
