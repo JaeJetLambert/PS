@@ -232,3 +232,23 @@ body {
   padding: 1rem;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
+/* --- NAV BAR LAYOUT --- */
+.nav-links {
+  display: flex;
+  justify-content: flex-end;   /* keep links on the right */
+  align-items: center;
+  gap: 2.5rem;                  /* <— increase spacing between items */
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.nav-links a {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.nav-links a:hover {
+  text-decoration: underline;
+}
