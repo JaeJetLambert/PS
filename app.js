@@ -89,3 +89,35 @@ document.getElementById('newProjectBtn').addEventListener('click', () => {
 updateCounters();
 populateDesignerFilter();
 renderProjects();
+function renderProjects() {
+  // Find the project grid container
+  const grid = document.querySelector(".project-grid");
+
+  // Clear old content (so it doesn’t duplicate on refresh)
+  grid.innerHTML = "";
+
+  // Sort projects alphabetically by name
+  projects
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach(project => {
+      // Get the first couple of tasks to preview
+      const nextTasks = project.tasks
+        .slice(0, 2)
+        .map(t => `<li>${t.name} – <strong>${t.status}</strong></li>`)
+        .join("");
+
+      // Build the card
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <h3>${project.name}</h3>
+        <p><strong>Designer:</strong> ${project.designer}</p>
+        <ul>${nextTasks}</ul>
+        <button class="view-btn" data-name="${project.name}">View Details</button>
+      `;
+
+      // Add to grid
+      grid.appendChild(card);
+    });
+}
+renderProjects();
