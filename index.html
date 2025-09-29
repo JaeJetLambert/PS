@@ -5,6 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Status Dashboard</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+  /* Summary counters */
+  .summary-cards {
+    display: flex;
+    gap: 1rem;
+    padding: 1.5rem 2rem 0;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .summary-cards .card {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    padding: 1rem 1.25rem;
+    min-width: 220px;
+    flex: 0 1 240px;
+  }
+  .summary-cards .card h3 {
+    margin: 0 0 .4rem;
+    font-size: 1rem;
+    color: #333;
+    font-weight: 600;
+  }
+  .summary-cards .card h2 {
+    margin: 0;
+    font-size: 2rem;
+    line-height: 1.1;
+    color: #111;
+  }
+</style>
 </head>
 <body class="dashboard-body">
 
