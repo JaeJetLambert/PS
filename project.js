@@ -1,13 +1,15 @@
 // ===============================
 // project.js — Detail page logic (Complete + Abandon + Reactivate)
+// Now reads ?id=<uuid> first, falls back to ?name=<string>
 // ===============================
 
 // Supabase client (created in project.html above this script)
 const db = window.supabase;
 
-// Read the `name` query param (e.g., project.html?name=Smith)
-const params = new URLSearchParams(location.search);
-const projectName = params.get('name');
+// --- URL params: prefer id, fallback to name ----------------------
+const params   = new URLSearchParams(location.search);
+const projId   = params.get('id');
+const projName = params.get('name'); // fallback
 
 // Cache DOM elements
 const title = document.getElementById('projectTitle');
@@ -15,6 +17,7 @@ const info  = document.getElementById('projectInfo');
 const btnDone = document.getElementById('completeBtn');
 const btnAbandon = document.getElementById('abandonBtn');
 const reactivateBtn = document.getElementById('reactivateBtn');
+const backBtn = document.getElementById('backBtn');
 
 // Complete modal elements
 const completeModal = document.getElementById('completeModal');
@@ -33,11 +36,18 @@ let project = null;
 
 // --- Data access ---------------------------------------------------
 async function fetchProject() {
-  const { data, error } = await db
-    .from('projects')
-    .select('*')
-    .eq('name', projectName)
-    .limit(1);
+  if (!projId && !projName) return null;
+
+  let q = db.from('projects').select('*').limit(1);
+
+  if (projId) {
+    q = q.eq('id', projId);
+  } else {
+    // Fallback to name; pick the most recently created if duplicates exist
+    q = q.eq('name', projName).order('created_at', { ascending: false });
+  }
+
+  const { data, error } = await q;
   if (error) throw error;
   if (!data || !data.length) return null;
 
@@ -94,6 +104,7 @@ function renderInfo() {
     ${abandonedBadge}
     ${notesBlocks}
   `;
+  // ^^^ FIXED: the template string properly closes with a backtick above
 
   const isCompleted = project.status === 'completed';
   const isAbandoned = project.status === 'abandoned';
@@ -136,6 +147,17 @@ window.addEventListener('click', (e) => {
 });
 
 // --- Event wiring --------------------------------------------------
+
+// Back button: go to previous page, or Dashboard if no history
+backBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.href = 'index.html';
+  }
+});
+
 // Complete → open modal
 btnDone.addEventListener('click', () => {
   if (!project) return;

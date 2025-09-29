@@ -32,7 +32,7 @@ function setTitle() {
 function renderList(gridEl, list) {
   gridEl.innerHTML = list.map(p => `
     <div class="dashboard-card"
-         onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+         onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
       <h3>${p.name}</h3>
       <p><strong>Designer:</strong> ${p.designer || ''}</p>
       <p><strong>${p.status === 'completed' ? 'Completed' : 'Start Date'}:</strong> ${

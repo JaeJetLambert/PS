@@ -57,7 +57,7 @@ function renderProjects() {
 
   grid.innerHTML = activeList.map(p => `
     <div class="dashboard-card"
-         onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+         onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
       <h3>${p.name}</h3>
       <p><strong>Designer:</strong> ${p.designer || ''}</p>
       <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
@@ -103,7 +103,7 @@ function setupSearch() {
     const grid = document.getElementById("projectGrid");
     grid.innerHTML = list.map(p => `
       <div class="dashboard-card"
-           onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+           onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
         <h3>${p.name}</h3>
         <p><strong>Designer:</strong> ${p.designer || ''}</p>
         <p><strong>Start Date:</strong> ${p.startDate || ''}</p>

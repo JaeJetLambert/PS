@@ -44,7 +44,7 @@ function render(list) {
     const dateText = ts ? new Date(ts).toLocaleDateString() : '—';
     return `
       <div class="dashboard-card"
-           onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+           onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
         <h3>${p.name}</h3>
         <p><strong>Designer:</strong> ${p.designer || ''}</p>
         <p><strong>${label}:</strong> ${dateText}</p>
