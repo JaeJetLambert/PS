@@ -1,13 +1,15 @@
 // completed.js — Completed projects list with realtime refresh
 const db = window.supabase;
 let projects = [];
+let rtChannel; // keep a reference so we can unsubscribe on unload
 
 async function loadAll() {
   const { data, error } = await db
-    .from('projects')
-    .select('*')
-    .order('completed_at', { ascending: false })
-    .order('created_at', { ascending: false });
+  .from('projects')
+  .select('*')
+  .eq('status', 'completed') // <-- only completed rows from the DB
+  .order('completed_at', { ascending: false })
+  .order('created_at', { ascending: false });
   if (error) throw error;
   return data.map(r => ({
     id: r.id,
@@ -38,30 +40,26 @@ function wireSearch() {
   const input = document.getElementById('searchInput');
   input.addEventListener('input', () => {
     const term = input.value.toLowerCase();
-    const completed = projects.filter(p => p.status === 'completed');
     const list = term
-      ? completed.filter(p => p.name.toLowerCase().includes(term))
-      : completed;
+  ? projects.filter(p => p.name.toLowerCase().includes(term))
+  : projects;
     render(list);
   });
 }
 
 // Realtime updates on completed page
 function setupRealtime() {
-  const channel = db.channel('projects-completed-live');
-  channel
-    .on('postgres_changes',
-      { event: '*', schema: 'public', table: 'projects' },
-      async () => {
-        try {
-          projects = await loadAll();
-          render(projects.filter(p => p.status === 'completed'));
-        } catch (e) {
-          console.error('Realtime refresh (completed) failed:', e);
-        }
-      }
-    )
-    .subscribe();
+  rtChannel = db.channel('projects-completed-live');
+rtChannel
+  .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, async () => {
+    try {
+      projects = await loadAll();
+      render(projects);
+    } catch (e) {
+      console.error('Realtime refresh (completed) failed:', e);
+    }
+  })
+  .subscribe();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -71,7 +69,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error(e);
     projects = [];
   }
-  render(projects.filter(p => p.status === 'completed'));
+  render(projects);
   wireSearch();
   setupRealtime();
+  window.addEventListener('beforeunload', () => {
+  try { rtChannel?.unsubscribe(); } catch (_) {}
+});
 });
