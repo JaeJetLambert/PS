@@ -6,35 +6,73 @@
   <title>Project Status Dashboard</title>
   <link rel="stylesheet" href="style.css" />
   <style>
-  /* Summary counters */
-  .summary-cards {
-    display: flex;
-    gap: 1rem;
-    padding: 1.5rem 2rem 0;
-    flex-wrap: wrap;
-    align-items: stretch;
-  }
-  .summary-cards .card {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    padding: 1rem 1.25rem;
-    min-width: 220px;
-    flex: 0 1 240px;
-  }
-  .summary-cards .card h3 {
-    margin: 0 0 .4rem;
-    font-size: 1rem;
-    color: #333;
-    font-weight: 600;
-  }
-  .summary-cards .card h2 {
-    margin: 0;
-    font-size: 2rem;
-    line-height: 1.1;
-    color: #111;
-  }
-</style>
+    /* Summary counter cards */
+    .summary-cards {
+      display: flex;
+      gap: 1rem;
+      padding: 1.5rem 2rem 0;
+      flex-wrap: wrap;
+      align-items: stretch;
+    }
+    .summary-cards .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      padding: 1rem 1.25rem;
+      min-width: 260px;
+      flex: 0 1 320px;
+    }
+    .card-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: .75rem;
+      margin-bottom: .5rem;
+    }
+    .summary-cards .card h3 {
+      margin: 0;
+      font-size: 1rem;
+      color: #333;
+      font-weight: 600;
+    }
+    .summary-cards .card h2 {
+      margin: 0;
+      font-size: 1.4rem;
+      line-height: 1.1;
+      color: #111;
+      font-weight: 700;
+    }
+    .mini-list {
+      list-style: none;
+      padding: 0;
+      margin: .25rem 0 0;
+    }
+    .mini-list li {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: .75rem;
+      padding: .15rem 0;
+      border-bottom: 1px dashed rgba(0,0,0,.06);
+    }
+    .mini-list li:last-child { border-bottom: 0; }
+    .mini-list .muted { opacity: .6; }
+
+    /* Header tools: search + New Project aligned top-right under nav */
+    .header-tools {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: .75rem;
+      padding: .5rem 2rem 0; /* t r b */
+    }
+    .header-tools input[type="text"] {
+      min-width: 260px;
+      padding: .5rem .6rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+    }
+  </style>
 </head>
 <body class="dashboard-body">
 
@@ -45,39 +83,58 @@
       <a href="index.html">Dashboard</a>
       <a href="completed.html">Completed</a>
       <div class="designer-dropdown">
-  <button class="dropbtn">By Designer ▾</button>
-  <div class="dropdown-content">
-    <a href="designer.html?name=Sarah">Sarah</a>
-    <a href="designer.html?name=Darby">Darby</a>
-    <a href="designer.html?name=Adaline">Adaline</a>
-  </div>
-</div>
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <!-- dynamically populated by nav.js -->
+          <span style="padding:.5rem 1rem;display:block;opacity:.7;">Loading…</span>
+        </div>
+      </div>
     </nav>
+
+    <!-- NEW: tools row under nav, aligned right -->
+    <div class="header-tools">
+      <input type="text" id="searchInput" placeholder="Search active projects..." />
+      <button id="newProjectBtn" class="save-btn">+ New Project</button>
+    </div>
   </header>
 
   <main>
-    <!-- Summary counters -->
+    <!-- Summary counters with per-designer breakdowns -->
     <section class="summary-cards">
+      <!-- Active -->
       <div class="card" id="activeCounter">
-        <h3>Active</h3>
-        <h2>0</h2>
+        <div class="card-top">
+          <h3>Active</h3>
+          <h2>0</h2>
+        </div>
+        <ul id="activeByDesigner" class="mini-list">
+          <li class="muted"><span>—</span><span>0</span></li>
+        </ul>
       </div>
-      <div class="card" id="completedCounter"
-     onclick="location.href='completed.html'"
-     style="cursor:pointer;">
-  <h3>Completed (This Year)</h3>
-  <h2>0</h2>
-</div>
-      <div class="card" id="pastDueCounter">
-        <h3>Past Due</h3>
-        <h2>0</h2>
-      </div>
-    </section>
 
-    <!-- Controls -->
-    <section class="dashboard-controls">
-      <input type="text" id="searchInput" placeholder="Search active projects..." />
-      <button id="newProjectBtn" class="save-btn">+ New Project</button>
+      <!-- Completed (clickable to Completed page) -->
+      <div class="card" id="completedCounter"
+           onclick="location.href='completed.html'"
+           style="cursor:pointer;">
+        <div class="card-top">
+          <h3>Completed (This Year)</h3>
+          <h2>0</h2>
+        </div>
+        <ul id="completedByDesigner" class="mini-list">
+          <li class="muted"><span>—</span><span>0</span></li>
+        </ul>
+      </div>
+
+      <!-- Past Due (logic coming soon) -->
+      <div class="card" id="pastDueCounter">
+        <div class="card-top">
+          <h3>Past Due</h3>
+          <h2>0</h2>
+        </div>
+        <ul id="pastDueByDesigner" class="mini-list">
+          <li class="muted"><span>—</span><span>0</span></li>
+        </ul>
+      </div>
     </section>
 
     <!-- Active Projects grid -->
@@ -135,7 +192,8 @@
     );
   </script>
 
-<script src="nav.js" defer></script>
+  <!-- Dynamic "By Designer" menu -->
+  <script src="nav.js" defer></script>
 
   <!-- Dashboard logic -->
   <script src="app.js" defer></script>

@@ -1,5 +1,7 @@
 // ===============================
-// app.js — Dashboard logic (ALPHA-SORTED + duplicate-name guard)
+// app.js — Dashboard logic
+// (A→Z sorting + realtime + duplicate-name guard
+//  + per-designer breakdowns in counters)
 // ===============================
 
 // --- DB Client (attached on each page by index.html) ---
@@ -8,9 +10,37 @@ let db; // set inside DOMContentLoaded
 // --- In-memory cache of projects for the UI ---
 let projects = [];
 
-// Case-insensitive name sorter
+// Case-insensitive name sorter (projects by name)
 const byName = (a, b) =>
   (a.name || '').localeCompare((b.name || ''), undefined, { sensitivity: 'base' });
+
+// Designer label normalizer for grouping
+const safeDesigner = (d) => (d && d.trim()) || 'Unassigned';
+
+// Group an array of projects -> [{ designer, count }] sorted A→Z
+function groupCountByDesigner(list) {
+  const map = new Map();
+  for (const p of list) {
+    const key = safeDesigner(p.designer);
+    map.set(key, (map.get(key) || 0) + 1);
+  }
+  return Array.from(map.entries())
+    .map(([designer, count]) => ({ designer, count }))
+    .sort((a, b) => a.designer.localeCompare(b.designer, undefined, { sensitivity: 'base' }));
+}
+
+// Render a tiny list inside a counter card
+function renderMiniList(ulId, items) {
+  const ul = document.getElementById(ulId);
+  if (!ul) return;
+  if (!items.length) {
+    ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
+    return;
+  }
+  ul.innerHTML = items.map(it =>
+    `<li><span>${it.designer}</span><span>${it.count}</span></li>`
+  ).join('');
+}
 
 // --- Data-access helpers ------------------------------------------
 async function dbLoadProjects() {
@@ -65,25 +95,31 @@ function renderProjects() {
   `).join("");
 }
 
-// --- Counters ------------------------------------------------------
+// --- Counters (+ per-designer lists) -------------------------------
 function updateCounters() {
   const year = new Date().getFullYear();
 
-  const active = projects.filter(
+  // Active
+  const activeList = projects.filter(
     p => p.status !== 'completed' && p.status !== 'abandoned'
-  ).length;
+  );
+  const activeCount = activeList.length;
+  document.querySelector('#activeCounter h2').textContent = activeCount;
+  renderMiniList('activeByDesigner', groupCountByDesigner(activeList));
 
+  // Completed (This Year)
   const completedThisYear = projects.filter(p =>
     p.status === 'completed' &&
     p.completed_at &&
     new Date(p.completed_at).getFullYear() === year
-  ).length;
+  );
+  document.querySelector('#completedCounter h2').textContent = completedThisYear.length;
+  renderMiniList('completedByDesigner', groupCountByDesigner(completedThisYear));
 
-  const pastDue = 0; // TODO: define rule later
-
-  document.getElementById('activeCounter').querySelector('h2').textContent = active;
-  document.getElementById('completedCounter').querySelector('h2').textContent = completedThisYear;
-  document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
+  // Past Due (placeholder for now — will fill once we define the rule)
+  const pastDueList = []; // TODO: compute from projects when logic is defined
+  document.querySelector('#pastDueCounter h2').textContent = pastDueList.length;
+  renderMiniList('pastDueByDesigner', groupCountByDesigner(pastDueList));
 }
 
 // --- Search (active projects only), ALPHA results ------------------
@@ -154,7 +190,7 @@ form.addEventListener('submit', async (e) => {
   };
   if (!newProj.name) return;
 
-  // --- Duplicate-name guard (case-insensitive) --------------------
+  // Duplicate-name guard (case-insensitive) — encourage disambiguation
   const dup = projects.some(
     p => (p.name || '').trim().toLowerCase() === newProj.name.toLowerCase()
   );
@@ -170,7 +206,7 @@ form.addEventListener('submit', async (e) => {
   try {
     await dbInsertProject(newProj);
     projects = await dbLoadProjects();
-    renderProjects();     // grid re-renders alpha
+    renderProjects();
     updateCounters();
     modal.style.display = 'none';
     form.reset();
@@ -196,7 +232,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   renderProjects();  // alpha-sorted
-  updateCounters();
+  updateCounters();  // fills the per-designer mini-lists
   setupSearch();
   setupRealtime();
 });
