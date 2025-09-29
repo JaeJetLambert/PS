@@ -5,74 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Status Dashboard</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    /* Summary counter cards */
-    .summary-cards {
-      display: flex;
-      gap: 1rem;
-      padding: 1.5rem 2rem 0;
-      flex-wrap: wrap;
-      align-items: stretch;
-    }
-    .summary-cards .card {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      padding: 1rem 1.25rem;
-      min-width: 260px;
-      flex: 0 1 320px;
-    }
-    .card-top {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: .75rem;
-      margin-bottom: .5rem;
-    }
-    .summary-cards .card h3 {
-      margin: 0;
-      font-size: 1rem;
-      color: #333;
-      font-weight: 600;
-    }
-    .summary-cards .card h2 {
-      margin: 0;
-      font-size: 1.4rem;
-      line-height: 1.1;
-      color: #111;
-      font-weight: 700;
-    }
-    .mini-list {
-      list-style: none;
-      padding: 0;
-      margin: .25rem 0 0;
-    }
-    .mini-list li {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: .75rem;
-      padding: .15rem 0;
-      border-bottom: 1px dashed rgba(0,0,0,.06);
-    }
-    .mini-list li:last-child { border-bottom: 0; }
-    .mini-list .muted { opacity: .6; }
-
-    /* Header tools: search + New Project aligned top-right under nav */
-    .header-tools {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: .75rem;
-      padding: .5rem 2rem 0; /* t r b */
-    }
-    .header-tools input[type="text"] {
-      min-width: 260px;
-      padding: .5rem .6rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
-    }
-  </style>
+  
 </head>
 <body class="dashboard-body">
 
@@ -114,8 +47,7 @@
 
       <!-- Completed (clickable to Completed page) -->
       <div class="card" id="completedCounter"
-           onclick="location.href='completed.html'"
-           style="cursor:pointer;">
+     onclick="location.href='completed.html'">
         <div class="card-top">
           <h3>Completed (This Year)</h3>
           <h2>0</h2>
@@ -139,7 +71,7 @@
 
     <!-- Active Projects grid -->
     <section>
-      <h2 style="padding:1rem 2rem 0;">Active Projects</h2>
+      <h2 class="section-title">Active Projects</h2>
       <div class="dashboard-grid" id="projectGrid"></div>
     </section>
   </main>
@@ -196,7 +128,7 @@
   <script src="nav.js" defer></script>
 
   <script src="ux.js" defer></script>  
-  
+
   <!-- Dashboard logic -->
   <script src="app.js" defer></script>
 </body>
