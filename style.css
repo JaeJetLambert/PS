@@ -143,6 +143,40 @@ body {
 .counter.past-due { background: #ffe6e6; border: 1px solid #e57373; }
 .counter.past-due h2 { color: #d32f2f; }
 
+/* ============================
+   Dashboard summary counters
+   ============================ */
+.summary-cards {
+  display: flex;
+  gap: 1rem;
+  padding: 1.5rem 2rem 0;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.summary-cards .card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  padding: 1rem 1.25rem;
+  min-width: 220px;
+  flex: 0 1 240px;
+}
+
+.summary-cards .card h3 {
+  margin: 0 0 .4rem;
+  font-size: 1rem;
+  color: #333;
+  font-weight: 600;
+}
+
+.summary-cards .card h2 {
+  margin: 0;
+  font-size: 2rem;
+  line-height: 1.1;
+  color: #111;
+}
+
 /* Modal */
 .modal {
   display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
