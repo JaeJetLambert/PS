@@ -1,8 +1,8 @@
 // ===============================
-// project.js — Detail page logic (with Complete modal)
+// project.js — Detail page logic (Complete + Abandon + Reactivate)
 // ===============================
 
-// Supabase client (created in project.html right above this script)
+// Supabase client (created in project.html above this script)
 const db = window.supabase;
 
 // Read the `name` query param (e.g., project.html?name=Smith)
@@ -14,6 +14,7 @@ const title = document.getElementById('projectTitle');
 const info  = document.getElementById('projectInfo');
 const btnDone = document.getElementById('completeBtn');
 const btnAbandon = document.getElementById('abandonBtn');
+const reactivateBtn = document.getElementById('reactivateBtn');
 
 // Complete modal elements
 const completeModal = document.getElementById('completeModal');
@@ -21,6 +22,12 @@ const closeCompleteModal = document.getElementById('closeCompleteModal');
 const completionNotesInput = document.getElementById('completionNotesInput');
 const completionDateInput = document.getElementById('completionDateInput');
 const completeConfirmBtn = document.getElementById('completeConfirmBtn');
+
+// Abandon modal elements
+const abandonModal = document.getElementById('abandonModal');
+const closeAbandonModal = document.getElementById('closeAbandonModal');
+const abandonNotesInput = document.getElementById('abandonNotesInput');
+const abandonConfirmBtn = document.getElementById('abandonConfirmBtn');
 
 let project = null;
 
@@ -43,8 +50,10 @@ async function fetchProject() {
     startDate: r.start_date ?? '',
     status: r.status ?? 'active',
     abandon_reason: r.abandon_reason ?? null,
-    completed_at: r.completed_at ?? null,        // <-- new field
-    completion_notes: r.completion_notes ?? null // <-- new field
+    abandoned_at: r.abandoned_at ?? null,
+    completed_at: r.completed_at ?? null,
+    completion_notes: r.completion_notes ?? null,
+    created_at: r.created_at
   };
 }
 
@@ -55,6 +64,7 @@ function renderInfo() {
     info.textContent = '';
     btnDone.disabled = true;
     btnAbandon.disabled = true;
+    reactivateBtn.style.display = 'none';
     return;
   }
 
@@ -64,9 +74,16 @@ function renderInfo() {
       }</p>`
     : '';
 
-  const notesBlock = project.completion_notes
-    ? `<p><strong>Completion Notes:</strong> ${project.completion_notes}</p>`
+  const abandonedBadge = project.status === 'abandoned'
+    ? `<p><strong>Abandoned:</strong> ${
+        project.abandoned_at ? new Date(project.abandoned_at).toLocaleDateString() : 'Today'
+      }</p>`
     : '';
+
+  const notesBlocks = [
+    project.completion_notes ? `<p><strong>Completion Notes:</strong> ${project.completion_notes}</p>` : '',
+    project.abandon_reason   ? `<p><strong>Abandon Notes:</strong> ${project.abandon_reason}</p>`       : ''
+  ].join('');
 
   title.textContent = project.name;
   info.innerHTML = `
@@ -74,15 +91,21 @@ function renderInfo() {
     <p><strong>Start Date:</strong> ${project.startDate || ''}</p>
     <p><strong>Status:</strong> ${project.status}</p>
     ${completedBadge}
-    ${notesBlock}
+    ${abandonedBadge}
+    ${notesBlocks}
   `;
 
-  const isClosed = project.status === 'completed' || project.status === 'abandoned';
-  btnDone.disabled = isClosed;
-  btnAbandon.disabled = isClosed;
+  const isCompleted = project.status === 'completed';
+  const isAbandoned = project.status === 'abandoned';
+
+  btnDone.disabled = isCompleted || isAbandoned;
+  btnAbandon.disabled = isCompleted || isAbandoned;
+
+  reactivateBtn.style.display = isAbandoned ? 'inline-block' : 'none';
+  reactivateBtn.disabled = !isAbandoned;
 }
 
-// --- Modal helpers -------------------------------------------------
+// --- Complete modal helpers ---------------------------------------
 function openCompleteModal() {
   // default date to today (YYYY-MM-DD)
   const today = new Date();
@@ -100,14 +123,26 @@ window.addEventListener('click', (e) => {
   if (e.target === completeModal) closeComplete();
 });
 
+// --- Abandon modal helpers ----------------------------------------
+function openAbandonModal() {
+  abandonNotesInput.value = '';
+  abandonModal.style.display = 'block';
+}
+function closeAbandon() { abandonModal.style.display = 'none'; }
+
+closeAbandonModal.addEventListener('click', closeAbandon);
+window.addEventListener('click', (e) => {
+  if (e.target === abandonModal) closeAbandon();
+});
+
 // --- Event wiring --------------------------------------------------
-// 1) Clicking "Mark as Completed" opens the modal
+// Complete → open modal
 btnDone.addEventListener('click', () => {
   if (!project) return;
   openCompleteModal();
 });
 
-// 2) Clicking "Done" persists status + date + optional notes
+// Complete modal → Done (save)
 completeConfirmBtn.addEventListener('click', async () => {
   if (!project) return;
 
@@ -146,24 +181,81 @@ completeConfirmBtn.addEventListener('click', async () => {
   alert(`${project.name} marked completed.`);
 });
 
-// (Abandon behavior unchanged for now; we can modal-ize it later if you want)
-btnAbandon.addEventListener('click', async () => {
+// Abandon → open modal
+btnAbandon.addEventListener('click', () => {
   if (!project) return;
-  const reason = prompt('Why is this project abandoned?'); // optional
-  if (reason === null) return;
-
-  const { error } = await db.from('projects')
-    .update({ status: 'abandoned', abandon_reason: reason })
-    .eq('id', project.id);
-  if (error) { alert('Update failed: ' + error.message); return; }
-
-  project.status = 'abandoned';
-  project.abandon_reason = reason;
-  renderInfo();
-  alert(`Abandoned with reason: ${reason}`);
+  if (project.status === 'completed' || project.status === 'abandoned') return;
+  openAbandonModal();
 });
 
-// Initial load
+// Abandon modal → Done (save; notes required)
+abandonConfirmBtn.addEventListener('click', async () => {
+  if (!project) return;
+
+  const notes = abandonNotesInput.value.trim();
+  if (!notes) {
+    alert('Please enter who abandoned and why.');
+    return;
+  }
+
+  // prevent double-submit
+  abandonConfirmBtn.disabled = true;
+  const old = abandonConfirmBtn.textContent;
+  abandonConfirmBtn.textContent = 'Saving...';
+
+  const nowIso = new Date().toISOString();
+  const { error } = await db.from('projects')
+    .update({ status: 'abandoned', abandon_reason: notes, abandoned_at: nowIso })
+    .eq('id', project.id);
+
+  if (error) {
+    alert('Update failed: ' + error.message);
+    abandonConfirmBtn.disabled = false;
+    abandonConfirmBtn.textContent = old;
+    return;
+  }
+
+  project.status = 'abandoned';
+  project.abandon_reason = notes;
+  project.abandoned_at = nowIso;
+
+  renderInfo();
+  closeAbandon();
+  abandonConfirmBtn.disabled = false;
+  abandonConfirmBtn.textContent = old;
+  alert('Project marked as abandoned.');
+});
+
+// Reactivate abandoned → back to active
+reactivateBtn.addEventListener('click', async () => {
+  if (!project || project.status !== 'abandoned') return;
+
+  const ok = confirm('Reactivate this project back to Active?');
+  if (!ok) return;
+
+  const { error } = await db.from('projects')
+    .update({
+      status: 'active',
+      abandon_reason: null,
+      abandoned_at: null,
+      completed_at: null,
+      completion_notes: null
+    })
+    .eq('id', project.id);
+
+  if (error) { alert('Update failed: ' + error.message); return; }
+
+  project.status = 'active';
+  project.abandon_reason = null;
+  project.abandoned_at = null;
+  project.completed_at = null;
+  project.completion_notes = null;
+
+  renderInfo();
+  alert('Project reactivated.');
+});
+
+// --- Initial load --------------------------------------------------
 (async function init() {
   try {
     project = await fetchProject();

@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Completed Projects</title>
   <link rel="stylesheet" href="style.css" />
+  <style>
+  .tab{padding:.4rem .8rem;border:1px solid #ccc;background:#fff;border-radius:6px;cursor:pointer}
+  .tab.active{background:#2d6a4f;color:#fff;border-color:#2d6a4f}
+</style>
 </head>
 <body class="dashboard-body">
   <header class="dashboard-header">
@@ -24,15 +28,23 @@
 </header>
 
   <main>
-    <section class="dashboard-controls">
-      <input type="text" id="searchInput" placeholder="Search completed projects..." />
-    </section>
+  <!-- search -->
+  <section class="dashboard-controls">
+    <input type="text" id="searchInput" placeholder="Search completed/abandoned..." />
+  </section>
 
-    <section>
-      <h2 style="padding:1rem 2rem 0;">Completed</h2>
-      <div class="dashboard-grid" id="completedGrid"></div>
-    </section>
-  </main>
+  <!-- tabs -->
+  <div class="tabs" style="display:flex; gap:.5rem; padding:0 2rem;">
+    <button id="tabCompleted" class="tab active">Completed</button>
+    <button id="tabAbandoned" class="tab">Abandoned</button>
+  </div>
+
+  <!-- results -->
+  <section>
+    <h2 style="padding:1rem 2rem 0;">Results</h2>
+    <div class="dashboard-grid" id="completedGrid"></div>
+  </section>
+</main>
 
   <!-- Supabase client -->
   <script type="module">

@@ -4,103 +4,97 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Project Status Dashboard</title>
-  <!-- Global styles for the dashboard and cards -->
   <link rel="stylesheet" href="style.css" />
 </head>
 <body class="dashboard-body">
 
-  <!-- ================= Header / Nav ================= -->
+  <!-- Header with shared nav -->
   <header class="dashboard-header">
-  <h1>Project Status Dashboard</h1>
-  <nav class="dashboard-nav">
-    <a href="index.html">Dashboard</a>
-    <a href="completed.html">Completed</a>
-    <div class="designer-dropdown">
-      <button class="dropbtn">By Designer ▾</button>
-      <div class="dropdown-content">
-        <a href="#">Sarah</a>
-        <a href="#">Darby</a>
-        <a href="#">Adaline</a>
+    <h1>Project Status Dashboard</h1>
+    <nav class="dashboard-nav">
+      <a href="index.html">Dashboard</a>
+      <a href="completed.html">Completed</a>
+      <div class="designer-dropdown">
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <a href="#">Sarah</a>
+          <a href="#">Darby</a>
+          <a href="#">Adaline</a>
+        </div>
       </div>
-    </div>
-  </nav>
-</header>
+    </nav>
+  </header>
 
   <main>
-    <!-- ================ Counters row ================= -->
-    <section class="dashboard-counters">
-      <div class="counter" id="activeCounter">
+    <!-- Summary counters -->
+    <section class="summary-cards">
+      <div class="card" id="activeCounter">
+        <h3>Active</h3>
         <h2>0</h2>
-        <p>Active</p>
       </div>
-      <div class="counter" id="completedCounter">
+      <div class="card" id="completedCounter">
+        <h3>Completed (This Year)</h3>
         <h2>0</h2>
-        <p>Completed (This Year)</p>
       </div>
-      <div class="counter past-due" id="pastDueCounter">
+      <div class="card" id="pastDueCounter">
+        <h3>Past Due</h3>
         <h2>0</h2>
-        <p>Past Due</p>
       </div>
     </section>
 
-    <!-- ============ Search + “New Project” row ============ -->
+    <!-- Controls -->
     <section class="dashboard-controls">
-      <input type="text" id="searchInput" placeholder="Search projects..." />
-      <button id="newProjectBtn">+ New Project</button>
+      <input type="text" id="searchInput" placeholder="Search active projects..." />
+      <button id="newProjectBtn" class="save-btn">+ New Project</button>
     </section>
 
-    <!-- ================ Project grid ================ -->
+    <!-- Active Projects grid -->
     <section>
       <h2 style="padding:1rem 2rem 0;">Active Projects</h2>
       <div class="dashboard-grid" id="projectGrid"></div>
     </section>
-
-    <!-- ================ Modal: Create New Project ================ -->
-    <div id="newProjectModal" class="modal">
-      <div class="modal-content">
-        <span id="closeModal" class="close">&times;</span>
-        <h2>Create New Project</h2>
-
-        <!-- New Project form (pure client-side; submit handled by app.js) -->
-        <form id="newProjectForm">
-          <label>
-            Project Name:
-            <input type="text" id="projectNameInput" required />
-          </label>
-
-          <label>
-            Designer:
-            <select id="designerSelect" required>
-              <option value="">--Select--</option>
-              <option value="Sarah">Sarah</option>
-              <option value="Darby">Darby</option>
-              <option value="Adaline">Adaline</option>
-            </select>
-          </label>
-
-          <label>
-            Type:
-            <select id="projectType" required>
-              <option value="">--Select--</option>
-              <option>Construction Only</option>
-              <option>Design Only</option>
-              <option>Construction and Design</option>
-            </select>
-          </label>
-
-          <label>
-            Start Date:
-            <input type="date" id="startDateInput" required />
-          </label>
-
-          <button type="submit" class="save-btn">Save Project</button>
-        </form>
-      </div>
-    </div>
   </main>
 
-  <!-- ============ Supabase client (browser/publishable key) ============ -->
-  <!-- This exposes `window.supabase` for app.js to use. Keep URL/key in sync with your project. -->
+  <!-- New Project Modal -->
+  <div id="newProjectModal" class="modal">
+    <div class="modal-content">
+      <span id="closeModal" class="close">&times;</span>
+      <h2>New Project</h2>
+      <form id="newProjectForm">
+        <label>
+          Project Name
+          <input type="text" id="projectNameInput" required />
+        </label>
+
+        <label>
+          Designer
+          <select id="designerSelect">
+            <option value="Sarah">Sarah</option>
+            <option value="Darby">Darby</option>
+            <option value="Adaline">Adaline</option>
+          </select>
+        </label>
+
+        <label>
+          Project Type
+          <select id="projectType">
+            <option value="Design Only">Design Only</option>
+            <option value="Construction Only">Construction Only</option>
+            <option value="Design + Construction">Design + Construction</option>
+          </select>
+        </label>
+
+        <label>
+          Start Date
+          <input type="date" id="startDateInput" />
+        </label>
+
+        <button type="submit" class="save-btn" style="margin-top:1rem;">Save Project</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Supabase client (must be above app.js) -->
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     window.supabase = createClient(
@@ -109,8 +103,7 @@
     );
   </script>
 
-  <!-- Main dashboard script (reads/writes via Supabase) -->
-  <script type="module"></script>
+  <!-- Dashboard logic -->
   <script src="app.js" defer></script>
 </body>
 </html>

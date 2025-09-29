@@ -2,15 +2,14 @@
 // app.js — Dashboard logic
 // ===============================
 
-// --- DB Client (attached on each page by index.html/project.html) ---
-let db; // Supabase JS client created in the HTML <script type="module"> block
+// --- DB Client (attached on each page by index.html) ---
+let db; // set inside DOMContentLoaded
 
-// --- In-memory cache of projects (UI works against this array) ---
+// --- In-memory cache of projects for the UI ---
 let projects = [];
 
 // --- Data-access helpers ------------------------------------------
-// Loads all projects from Supabase, newest first.
-// Also normalizes snake_case DB fields to camelCase for the UI.
+// Load all projects from Supabase (newest first)
 async function dbLoadProjects() {
   const { data, error } = await db
     .from('projects')
@@ -20,20 +19,20 @@ async function dbLoadProjects() {
 
   // Normalize for UI consumption
   return data.map(r => ({
-  id: r.id,
-  name: r.name,
-  designer: r.designer,
-  type: r.type,
-  startDate: r.start_date ?? '',
-  status: r.status ?? 'active',
-  abandon_reason: r.abandon_reason ?? null,
-  completed_at: r.completed_at ?? null,        // <-- add
-  completion_notes: r.completion_notes ?? null, // <-- add
-  created_at: r.created_at
-}));
+    id: r.id,
+    name: r.name,
+    designer: r.designer,
+    type: r.type,
+    startDate: r.start_date ?? '',
+    status: r.status ?? 'active',
+    abandon_reason: r.abandon_reason ?? null,
+    completed_at: r.completed_at ?? null,         // for counters
+    completion_notes: r.completion_notes ?? null, // (optional, not shown here)
+    created_at: r.created_at
+  }));
 }
 
-// Inserts a new project row into the DB (status defaults to 'active').
+// Insert a new project row
 async function dbInsertProject(p) {
   const { error } = await db.from('projects').insert({
     name: p.name,
@@ -46,12 +45,10 @@ async function dbInsertProject(p) {
 }
 
 // --- Rendering -----------------------------------------------------
-// Renders the dashboard card grid from the global `projects` array.
-// Each card links to the detail view by project *name*.
+// Render only ACTIVE projects in the grid
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
 
-  // show only active (not completed/abandoned)
   const activeList = projects.filter(
     p => p.status !== 'completed' && p.status !== 'abandoned'
   );
@@ -66,29 +63,56 @@ function renderProjects() {
   `).join("");
 }
 
-// --- Page bootstrap ------------------------------------------------
-// Wait for DOM, then load projects from DB, render, update counters, and wire search.
-document.addEventListener('DOMContentLoaded', async () => {
-    db = window.supabase;
-  if (!db) {
-    console.error('Supabase client not found on window.');
-    return; // prevents calling db.* if the client failed to load
-  }
-  try {
-    projects = await dbLoadProjects();
-  } catch (e) {
-    console.error('Failed to load from DB:', e);
-    projects = []; // fail-safe empty state
-  }
-  renderProjects(projects);
-  updateCounters();
-  setupSearch();
-  setupRealtime();
-});
-// Realtime: refetch & rerender whenever any project row changes
+// --- Counters ------------------------------------------------------
+function updateCounters() {
+  const year = new Date().getFullYear();
+
+  const active = projects.filter(
+    p => p.status !== 'completed' && p.status !== 'abandoned'
+  ).length;
+
+  const completedThisYear = projects.filter(p =>
+    p.status === 'completed' &&
+    p.completed_at &&
+    new Date(p.completed_at).getFullYear() === year
+  ).length;
+
+  const pastDue = 0; // TODO: define rule later
+
+  document.getElementById('activeCounter').querySelector('h2').textContent = active;
+  document.getElementById('completedCounter').querySelector('h2').textContent = completedThisYear;
+  document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
+}
+
+// --- Search (active projects only) --------------------------------
+function setupSearch() {
+  const input = document.getElementById('searchInput');
+  input.addEventListener('input', () => {
+    const term = input.value.toLowerCase();
+
+    const activeList = projects.filter(
+      p => p.status !== 'completed' && p.status !== 'abandoned'
+    );
+
+    const list = term
+      ? activeList.filter(p => (p.name || '').toLowerCase().includes(term))
+      : activeList;
+
+    const grid = document.getElementById("projectGrid");
+    grid.innerHTML = list.map(p => `
+      <div class="dashboard-card"
+           onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+        <h3>${p.name}</h3>
+        <p><strong>Designer:</strong> ${p.designer || ''}</p>
+        <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
+      </div>
+    `).join("");
+  });
+}
+
+// --- Realtime: refresh dashboard whenever any row changes ----------
 function setupRealtime() {
   const channel = db.channel('projects-live');
-
   channel
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'projects' },
@@ -106,32 +130,17 @@ function setupRealtime() {
 }
 
 // --- New Project Modal Logic --------------------------------------
-// Handles opening/closing the modal and submitting the new project form.
 const modal = document.getElementById("newProjectModal");
 const newBtn = document.getElementById("newProjectBtn");
 const closeModal = document.getElementById("closeModal");
 const form = document.getElementById("newProjectForm");
 
-// Open the modal
-newBtn.addEventListener("click", () => {
-  modal.style.display = "block";
-});
+newBtn.addEventListener("click", () => { modal.style.display = "block"; });
+closeModal.addEventListener("click", () => { modal.style.display = "none"; });
+window.addEventListener("click", e => { if (e.target === modal) modal.style.display = "none"; });
 
-// Close when clicking the × icon
-closeModal.addEventListener("click", () => {
-  modal.style.display = "none";
-});
-
-// Close when clicking the backdrop
-window.addEventListener("click", e => {
-  if (e.target === modal) modal.style.display = "none";
-});
-
-// Create a new project in Supabase, then refresh the grid and counters.
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
-
-  // Collect form values
   const newProj = {
     name: document.getElementById('projectNameInput').value.trim(),
     designer: document.getElementById('designerSelect').value,
@@ -139,65 +148,38 @@ form.addEventListener('submit', async (e) => {
     startDate: document.getElementById('startDateInput').value,
     status: 'active'
   };
-  if (!newProj.name) return; // minimal guard
+  if (!newProj.name) return;
 
   try {
-    await dbInsertProject(newProj);     // write to DB
-    projects = await dbLoadProjects();  // refresh cache from DB
-    renderProjects(projects);           // repaint UI
-    updateCounters();                   // update top counters
-    modal.style.display = 'none';       // close modal
-    form.reset();                       // clear form
+    await dbInsertProject(newProj);
+    projects = await dbLoadProjects();
+    renderProjects();
+    updateCounters();
+    modal.style.display = 'none';
+    form.reset();
   } catch (err) {
     alert('Could not save project: ' + err.message);
     console.error(err);
   }
 });
 
-// --- Counters + Search functionality -------------------------------
-// Calculates and updates the top summary counters.
-// Past Due is a placeholder until business logic is defined.
-function updateCounters() {
-  const year = new Date().getFullYear();
+// --- Page bootstrap ------------------------------------------------
+document.addEventListener('DOMContentLoaded', async () => {
+  db = window.supabase;
+  if (!db) {
+    console.error('Supabase client not found on window.');
+    return;
+  }
 
-  const active = projects.filter(p =>
-    p.status !== 'completed' && p.status !== 'abandoned'
-  ).length;
+  try {
+    projects = await dbLoadProjects();
+  } catch (e) {
+    console.error('Failed to load from DB:', e);
+    projects = [];
+  }
 
-  const completedThisYear = projects.filter(p =>
-    p.status === 'completed' &&
-    p.completed_at &&
-    new Date(p.completed_at).getFullYear() === year
-  ).length;
-
-  const pastDue = 0; // TODO: define rule later
-
-  document.getElementById('activeCounter').querySelector('h2').textContent = active;
-  document.getElementById('completedCounter').querySelector('h2').textContent = completedThisYear;
-  document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
-}
-
-// Simple client-side filter that reuses the same renderer,
-// so results stay clickable and styled the same way.
-function setupSearch() {
-  const input = document.getElementById('searchInput');
-  input.addEventListener('input', () => {
-    const term = input.value.toLowerCase();
-    const activeList = projects.filter(
-      p => p.status !== 'completed' && p.status !== 'abandoned'
-    );
-    const list = term
-      ? activeList.filter(p => p.name.toLowerCase().includes(term))
-      : activeList;
-
-    const grid = document.getElementById("projectGrid");
-    grid.innerHTML = list.map(p => `
-      <div class="dashboard-card"
-           onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
-        <h3>${p.name}</h3>
-        <p><strong>Designer:</strong> ${p.designer || ''}</p>
-        <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
-      </div>
-    `).join("");
-  });
-}
+  renderProjects();
+  updateCounters();
+  setupSearch();
+  setupRealtime();
+});

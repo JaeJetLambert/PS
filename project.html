@@ -8,61 +8,70 @@
 </head>
 <body class="dashboard-body">
 
-  <!-- Simple top “navbar”: page title + back link -->
+  <!-- Header with shared nav -->
   <header class="dashboard-header">
-  <h1 id="projectTitle">Loading...</h1>
-  <nav class="dashboard-nav">
-    <a href="index.html">Dashboard</a>
-    <a href="completed.html">Completed</a>
-    <div class="designer-dropdown">
-      <button class="dropbtn">By Designer ▾</button>
-      <div class="dropdown-content">
-        <a href="#">Sarah</a>
-        <a href="#">Darby</a>
-        <a href="#">Adaline</a>
+    <h1 id="projectTitle">Loading...</h1>
+    <nav class="dashboard-nav">
+      <a href="index.html">Dashboard</a>
+      <a href="completed.html">Completed</a>
+      <div class="designer-dropdown">
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <a href="#">Sarah</a>
+          <a href="#">Darby</a>
+          <a href="#">Adaline</a>
+        </div>
       </div>
-    </div>
-  </nav>
-</header>
+    </nav>
+  </header>
+
   <main class="project-details">
     <!-- Project info panel (filled by project.js) -->
-    <section id="projectInfo" class="info-card">
-      <!-- Project info will load here -->
-    </section>
+    <section id="projectInfo" class="info-card"></section>
 
-    <!-- Placeholder for future per-project tasks (not wired yet) -->
+    <!-- Placeholder for future per-project tasks -->
     <section class="tasks-section">
       <h2>Tasks</h2>
       <div id="taskList"></div>
     </section>
 
-    <!-- Actions that update the project’s status in Supabase -->
+    <!-- Actions -->
     <div class="actions">
       <button id="completeBtn">✅ Mark as Completed</button>
       <button id="abandonBtn">⚠️ Abandon Project</button>
+      <button id="reactivateBtn" style="display:none;">🔄 Reactivate</button>
     </div>
   </main>
 
-  <!-- Supabase client for this page (detail view uses it directly) -->
-   <!-- ~line 24 -->
-<!-- Complete Project Modal -->
-<div id="completeModal" class="modal">
-  <div class="modal-content">
-    <span id="closeCompleteModal" class="close">&times;</span>
-    <h2>Complete Project</h2>
-    <p>Do you want to add any additional notes to this project? (optional)</p>
-    <textarea id="completionNotesInput" rows="4" placeholder="Notes about completion..."></textarea>
+  <!-- Complete Project Modal -->
+  <div id="completeModal" class="modal">
+    <div class="modal-content">
+      <span id="closeCompleteModal" class="close">&times;</span>
+      <h2>Complete Project</h2>
+      <p>Do you want to add any additional notes to this project? (optional)</p>
+      <textarea id="completionNotesInput" rows="4" placeholder="Notes about completion..."></textarea>
 
-    <label style="display:block; margin-top:0.8rem;">
-      Completed Date:
-      <input type="date" id="completionDateInput" />
-    </label>
+      <label style="display:block; margin-top:0.8rem;">
+        Completed Date:
+        <input type="date" id="completionDateInput" />
+      </label>
 
-    <button id="completeConfirmBtn" class="save-btn" style="margin-top:1rem;">
-      Done
-    </button>
+      <button id="completeConfirmBtn" class="save-btn" style="margin-top:1rem;">Done</button>
+    </div>
   </div>
-</div>
+
+  <!-- Abandon Project Modal -->
+  <div id="abandonModal" class="modal">
+    <div class="modal-content">
+      <span id="closeAbandonModal" class="close">&times;</span>
+      <h2>Abandon Project</h2>
+      <p>Who is abandoning this project, and why? (required)</p>
+      <textarea id="abandonNotesInput" rows="4" placeholder="Ex: Sarah – client paused indefinitely" required></textarea>
+      <button id="abandonConfirmBtn" class="save-btn" style="margin-top:1rem;">Done</button>
+    </div>
+  </div>
+
+  <!-- Supabase client (must be above project.js) -->
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     window.supabase = createClient(
@@ -71,8 +80,7 @@
     );
   </script>
 
-  <!-- Detail page script: reads project by name param; updates status -->
-  <script type="module"></script>
+  <!-- Detail page logic -->
   <script src="project.js" defer></script>
 </body>
 </html>

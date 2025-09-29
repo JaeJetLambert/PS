@@ -1,16 +1,21 @@
-// completed.js — Completed projects list with realtime refresh
+// completed.js — Completed/Abandoned lists with tabs + realtime
 const db = window.supabase;
-let projects = [];
-let rtChannel; // keep a reference so we can unsubscribe on unload
 
+let projects = [];
+let currentTab = 'completed';  // 'completed' | 'abandoned'
+let rtChannel;                  // for unsubscribe on unload
+
+// Load both completed and abandoned from the DB (sorted by their dates)
 async function loadAll() {
   const { data, error } = await db
-  .from('projects')
-  .select('*')
-  .eq('status', 'completed') // <-- only completed rows from the DB
-  .order('completed_at', { ascending: false })
-  .order('created_at', { ascending: false });
+    .from('projects')
+    .select('*')
+    .in('status', ['completed', 'abandoned'])
+    .order('completed_at', { ascending: false })
+    .order('abandoned_at', { ascending: false })
+    .order('created_at', { ascending: false });
   if (error) throw error;
+
   return data.map(r => ({
     id: r.id,
     name: r.name,
@@ -18,50 +23,89 @@ async function loadAll() {
     type: r.type,
     startDate: r.start_date ?? '',
     status: r.status ?? 'active',
-    completed_at: r.completed_at ?? null
+    completed_at: r.completed_at ?? null,
+    abandoned_at: r.abandoned_at ?? null
   }));
 }
 
+// Basic card renderer for whatever list we pass in
 function render(list) {
   const grid = document.getElementById('completedGrid');
-  grid.innerHTML = list.map(p => `
-    <div class="dashboard-card"
-         onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
-      <h3>${p.name}</h3>
-      <p><strong>Designer:</strong> ${p.designer || ''}</p>
-      <p><strong>Completed:</strong> ${
-        p.completed_at ? new Date(p.completed_at).toLocaleDateString() : '—'
-      }</p>
-    </div>
-  `).join('');
+  grid.innerHTML = list.map(p => {
+    const isAbandoned = p.status === 'abandoned';
+    const ts = isAbandoned ? p.abandoned_at : p.completed_at;
+    const label = isAbandoned ? 'Abandoned' : 'Completed';
+    const dateText = ts ? new Date(ts).toLocaleDateString() : '—';
+    return `
+      <div class="dashboard-card"
+           onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
+        <h3>${p.name}</h3>
+        <p><strong>Designer:</strong> ${p.designer || ''}</p>
+        <p><strong>${label}:</strong> ${dateText}</p>
+      </div>
+    `;
+  }).join('');
 }
 
+// Re-render respecting the active tab + current search term
+function renderFiltered() {
+  const term = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+
+  const base = currentTab === 'completed'
+    ? projects.filter(p => p.status === 'completed')
+    : projects.filter(p => p.status === 'abandoned');
+
+  const list = term
+    ? base.filter(p =>
+        (p.name || '').toLowerCase().includes(term) ||
+        (p.designer || '').toLowerCase().includes(term)
+      )
+    : base;
+
+  render(list);
+}
+
+// Search: updates the filtered render as you type
 function wireSearch() {
   const input = document.getElementById('searchInput');
-  input.addEventListener('input', () => {
-    const term = input.value.toLowerCase();
-    const list = term
-  ? projects.filter(p => p.name.toLowerCase().includes(term))
-  : projects;
-    render(list);
-  });
+  input.addEventListener('input', renderFiltered);
 }
 
-// Realtime updates on completed page
+// Tabs: Completed / Abandoned
+function wireTabs() {
+  const tC = document.getElementById('tabCompleted');
+  const tA = document.getElementById('tabAbandoned');
+
+  function setActive(tab) {
+    currentTab = tab;
+    tC.classList.toggle('active', tab === 'completed');
+    tA.classList.toggle('active', tab === 'abandoned');
+    renderFiltered();
+  }
+
+  tC.addEventListener('click', () => setActive('completed'));
+  tA.addEventListener('click', () => setActive('abandoned'));
+}
+
+// Realtime: refetch and re-render when any project row changes
 function setupRealtime() {
   rtChannel = db.channel('projects-completed-live');
-rtChannel
-  .on('postgres_changes', { event: '*', schema: 'public', table: 'projects' }, async () => {
-    try {
-      projects = await loadAll();
-      render(projects);
-    } catch (e) {
-      console.error('Realtime refresh (completed) failed:', e);
-    }
-  })
-  .subscribe();
+  rtChannel
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'projects' },
+      async () => {
+        try {
+          projects = await loadAll();
+          renderFiltered();
+        } catch (e) {
+          console.error('Realtime refresh (completed/abandoned) failed:', e);
+        }
+      }
+    )
+    .subscribe();
 }
 
+// Init
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     projects = await loadAll();
@@ -69,10 +113,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.error(e);
     projects = [];
   }
-  render(projects);
   wireSearch();
+  wireTabs();
+  renderFiltered();
   setupRealtime();
+
+  // tidy up the realtime subscription when leaving the page
   window.addEventListener('beforeunload', () => {
-  try { rtChannel?.unsubscribe(); } catch (_) {}
-});
+    try { rtChannel?.unsubscribe(); } catch (_) {}
+  });
 });
