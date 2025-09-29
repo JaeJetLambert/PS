@@ -20,15 +20,17 @@ async function dbLoadProjects() {
 
   // Normalize for UI consumption
   return data.map(r => ({
-    id: r.id,
-    name: r.name,
-    designer: r.designer,
-    type: r.type,
-    startDate: r.start_date ?? '',
-    status: r.status ?? 'active',
-    abandon_reason: r.abandon_reason ?? null,
-    created_at: r.created_at
-  }));
+  id: r.id,
+  name: r.name,
+  designer: r.designer,
+  type: r.type,
+  startDate: r.start_date ?? '',
+  status: r.status ?? 'active',
+  abandon_reason: r.abandon_reason ?? null,
+  completed_at: r.completed_at ?? null,        // <-- add
+  completion_notes: r.completion_notes ?? null, // <-- add
+  created_at: r.created_at
+}));
 }
 
 // Inserts a new project row into the DB (status defaults to 'active').
@@ -156,12 +158,22 @@ form.addEventListener('submit', async (e) => {
 // Calculates and updates the top summary counters.
 // Past Due is a placeholder until business logic is defined.
 function updateCounters() {
-  const active    = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned').length;
-  const completed = projects.filter(p => p.status === 'completed').length;
-  const pastDue   = 0; // TODO: define "past due" rule (e.g., startDate + N days && not completed)
+  const year = new Date().getFullYear();
+
+  const active = projects.filter(p =>
+    p.status !== 'completed' && p.status !== 'abandoned'
+  ).length;
+
+  const completedThisYear = projects.filter(p =>
+    p.status === 'completed' &&
+    p.completed_at &&
+    new Date(p.completed_at).getFullYear() === year
+  ).length;
+
+  const pastDue = 0; // TODO: define rule later
 
   document.getElementById('activeCounter').querySelector('h2').textContent = active;
-  document.getElementById('completedCounter').querySelector('h2').textContent = completed;
+  document.getElementById('completedCounter').querySelector('h2').textContent = completedThisYear;
   document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
 }
 

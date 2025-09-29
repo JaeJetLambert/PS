@@ -1,4 +1,4 @@
-// completed.js — render completed projects list
+// completed.js — Completed projects list with realtime refresh
 const db = window.supabase;
 let projects = [];
 
@@ -45,6 +45,7 @@ function wireSearch() {
     render(list);
   });
 }
+
 // Realtime updates on completed page
 function setupRealtime() {
   const channel = db.channel('projects-completed-live');
