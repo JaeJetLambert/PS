@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Completed Projects</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="dashboard-body">
+  <header class="dashboard-header">
+    <h1>Completed Projects</h1>
+    <nav class="dashboard-nav">
+      <a href="index.html">Active</a>
+      <a href="completed.html">Completed</a>
+      <div class="designer-dropdown">
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <a href="#">Alice</a>
+          <a href="#">Bob</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="dashboard-controls">
+      <input type="text" id="searchInput" placeholder="Search completed projects..." />
+    </section>
+
+    <section>
+      <h2 style="padding:1rem 2rem 0;">Completed</h2>
+      <div class="dashboard-grid" id="completedGrid"></div>
+    </section>
+  </main>
+
+  <!-- Supabase client -->
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    window.supabase = createClient(
+      'https://cdrinxjwnzetcfvicwml.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY'
+    );
+  </script>
+
+  <script src="completed.js" defer></script>
+</body>
+</html>

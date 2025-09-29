@@ -48,12 +48,18 @@ async function dbInsertProject(p) {
 // Each card links to the detail view by project *name*.
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
-  grid.innerHTML = projects.map((p, i) => `
+
+  // show only active (not completed/abandoned)
+  const activeList = projects.filter(
+    p => p.status !== 'completed' && p.status !== 'abandoned'
+  );
+
+  grid.innerHTML = activeList.map(p => `
     <div class="dashboard-card"
          onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
       <h3>${p.name}</h3>
-      <p><strong>Designer:</strong> ${p.designer}</p>
-      <p><strong>Start Date:</strong> ${p.startDate}</p>
+      <p><strong>Designer:</strong> ${p.designer || ''}</p>
+      <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
     </div>
   `).join("");
 }
@@ -145,19 +151,20 @@ function setupSearch() {
   const input = document.getElementById('searchInput');
   input.addEventListener('input', () => {
     const term = input.value.toLowerCase();
-    if (!term) {
-      renderProjects();          // show full list again
-      return;
-    }
-    const filtered = projects.filter(p => p.name.toLowerCase().includes(term));
-    // render the filtered list without mutating `projects`
+    const activeList = projects.filter(
+      p => p.status !== 'completed' && p.status !== 'abandoned'
+    );
+    const list = term
+      ? activeList.filter(p => p.name.toLowerCase().includes(term))
+      : activeList;
+
     const grid = document.getElementById("projectGrid");
-    grid.innerHTML = filtered.map(p => `
+    grid.innerHTML = list.map(p => `
       <div class="dashboard-card"
            onclick="window.location.href='project.html?name=${encodeURIComponent(p.name)}'">
         <h3>${p.name}</h3>
-        <p><strong>Designer:</strong> ${p.designer}</p>
-        <p><strong>Start Date:</strong> ${p.startDate}</p>
+        <p><strong>Designer:</strong> ${p.designer || ''}</p>
+        <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
       </div>
     `).join("");
   });
