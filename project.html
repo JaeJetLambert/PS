@@ -34,6 +34,25 @@
   </main>
 
   <!-- Supabase client for this page (detail view uses it directly) -->
+   <!-- ~line 24 -->
+<!-- Complete Project Modal -->
+<div id="completeModal" class="modal">
+  <div class="modal-content">
+    <span id="closeCompleteModal" class="close">&times;</span>
+    <h2>Complete Project</h2>
+    <p>Do you want to add any additional notes to this project? (optional)</p>
+    <textarea id="completionNotesInput" rows="4" placeholder="Notes about completion..."></textarea>
+
+    <label style="display:block; margin-top:0.8rem;">
+      Completed Date:
+      <input type="date" id="completionDateInput" />
+    </label>
+
+    <button id="completeConfirmBtn" class="save-btn" style="margin-top:1rem;">
+      Done
+    </button>
+  </div>
+</div>
   <script type="module">
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     window.supabase = createClient(
