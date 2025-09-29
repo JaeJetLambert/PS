@@ -81,7 +81,27 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderProjects(projects);
   updateCounters();
   setupSearch();
+  setupRealtime();
 });
+// Realtime: refetch & rerender whenever any project row changes
+function setupRealtime() {
+  const channel = db.channel('projects-live');
+
+  channel
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'projects' },
+      async () => {
+        try {
+          projects = await dbLoadProjects();
+          renderProjects();
+          updateCounters();
+        } catch (e) {
+          console.error('Realtime refresh failed:', e);
+        }
+      }
+    )
+    .subscribe();
+}
 
 // --- New Project Modal Logic --------------------------------------
 // Handles opening/closing the modal and submitting the new project form.

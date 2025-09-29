@@ -45,6 +45,23 @@ function wireSearch() {
     render(list);
   });
 }
+// Realtime updates on completed page
+function setupRealtime() {
+  const channel = db.channel('projects-completed-live');
+  channel
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'projects' },
+      async () => {
+        try {
+          projects = await loadAll();
+          render(projects.filter(p => p.status === 'completed'));
+        } catch (e) {
+          console.error('Realtime refresh (completed) failed:', e);
+        }
+      }
+    )
+    .subscribe();
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
@@ -55,4 +72,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   render(projects.filter(p => p.status === 'completed'));
   wireSearch();
+  setupRealtime();
 });

@@ -6,14 +6,24 @@
   <title>Project Details</title>
   <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body class="dashboard-body">
 
   <!-- Simple top “navbar”: page title + back link -->
-  <div class="navbar">
-    <h1 id="projectTitle">Loading...</h1>
-    <a href="index.html" class="nav-link">← Back to Dashboard</a>
-  </div>
-
+  <header class="dashboard-header">
+  <h1 id="projectTitle">Loading...</h1>
+  <nav class="dashboard-nav">
+    <a href="index.html">Dashboard</a>
+    <a href="completed.html">Completed</a>
+    <div class="designer-dropdown">
+      <button class="dropbtn">By Designer ▾</button>
+      <div class="dropdown-content">
+        <a href="#">Sarah</a>
+        <a href="#">Darby</a>
+        <a href="#">Adaline</a>
+      </div>
+    </div>
+  </nav>
+</header>
   <main class="project-details">
     <!-- Project info panel (filled by project.js) -->
     <section id="projectInfo" class="info-card">
