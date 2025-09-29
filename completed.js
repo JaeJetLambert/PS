@@ -1,11 +1,17 @@
-// completed.js — Completed/Abandoned lists with tabs + realtime
+// ===============================
+// completed.js — Completed/Abandoned lists with tabs + realtime (ALPHA-SORTED)
+// ===============================
 const db = window.supabase;
 
 let projects = [];
 let currentTab = 'completed';  // 'completed' | 'abandoned'
 let rtChannel;                  // for unsubscribe on unload
 
-// Load both completed and abandoned from the DB (sorted by their dates)
+// Case-insensitive name sorter
+const byName = (a, b) =>
+  (a.name || '').localeCompare((b.name || ''), undefined, { sensitivity: 'base' });
+
+// Load both completed and abandoned from the DB
 async function loadAll() {
   const { data, error } = await db
     .from('projects')
@@ -47,7 +53,7 @@ function render(list) {
   }).join('');
 }
 
-// Re-render respecting the active tab + current search term
+// Re-render respecting the active tab + current search term (ALPHA-SORTED)
 function renderFiltered() {
   const term = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
 
@@ -55,12 +61,13 @@ function renderFiltered() {
     ? projects.filter(p => p.status === 'completed')
     : projects.filter(p => p.status === 'abandoned');
 
-  const list = term
+  const list = (term
     ? base.filter(p =>
         (p.name || '').toLowerCase().includes(term) ||
         (p.designer || '').toLowerCase().includes(term)
       )
-    : base;
+    : base
+  ).sort(byName); // <-- enforce A→Z
 
   render(list);
 }
@@ -96,7 +103,7 @@ function setupRealtime() {
       async () => {
         try {
           projects = await loadAll();
-          renderFiltered();
+          renderFiltered(); // keeps sort + tab + search
         } catch (e) {
           console.error('Realtime refresh (completed/abandoned) failed:', e);
         }

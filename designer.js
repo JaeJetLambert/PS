@@ -1,5 +1,5 @@
 // ===============================
-// designer.js — Projects filtered to a single designer
+// designer.js — Per-designer view (ALPHA-SORTED + realtime)
 // ===============================
 
 const db = window.supabase;
@@ -11,12 +11,17 @@ const designerName = params.get('name') || '';
 let all = [];        // all projects for this designer
 let rtChannel = null;
 
-// ---------- UI helpers ----------
+// ---------- UI refs ----------
 const h1 = document.getElementById('designerPageTitle');
 const searchInput = document.getElementById('searchInput');
 const activeGrid = document.getElementById('designerActiveGrid');
 const completedGrid = document.getElementById('designerCompletedGrid');
 
+// Case-insensitive name sorter
+const byName = (a, b) =>
+  (a.name || '').localeCompare((b.name || ''), undefined, { sensitivity: 'base' });
+
+// ---------- Title ----------
 function setTitle() {
   h1.textContent = designerName
     ? `Projects — ${designerName}`
@@ -60,24 +65,24 @@ function updateCounters() {
   document.querySelector('#pastDueCounter h2').textContent = pastDue;
 }
 
-// Apply search term across both lists and render
+// Apply search term across both lists and render (ALPHA-SORTED)
 function renderAll() {
   const term = (searchInput?.value || '').trim().toLowerCase();
 
   const active = all.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
   const completed = all.filter(p => p.status === 'completed');
 
-  const activeFiltered = term
-    ? active.filter(p => (p.name || '').toLowerCase().includes(term))
-    : active;
+  const activeRendered = (
+    term ? active.filter(p => (p.name || '').toLowerCase().includes(term)) : active
+  ).sort(byName);
 
-  const completedFiltered = term
-    ? completed.filter(p => (p.name || '').toLowerCase().includes(term))
-    : completed;
+  const completedRendered = (
+    term ? completed.filter(p => (p.name || '').toLowerCase().includes(term)) : completed
+  ).sort(byName);
 
-  renderList(activeGrid, activeFiltered);
-  renderList(completedGrid, completedFiltered);
-  updateCounters(); // counters are based on all (not filtered); change to use filtered if you prefer
+  renderList(activeGrid, activeRendered);
+  renderList(completedGrid, completedRendered);
+  updateCounters(); // counters are based on all; change to use filtered if you prefer
 }
 
 // ---------- Data ----------
@@ -115,12 +120,11 @@ function setupRealtime() {
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'projects' },
       async (payload) => {
-        // Lightweight filter: only refetch if the changed row involves this designer
         const row = payload.new || payload.old || {};
         if (!designerName || row.designer === designerName) {
           try {
             all = await loadForDesigner();
-            renderAll();
+            renderAll(); // keeps alpha sort + search
           } catch (e) {
             console.error('Realtime refresh (designer) failed:', e);
           }

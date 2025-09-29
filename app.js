@@ -1,5 +1,5 @@
 // ===============================
-// app.js — Dashboard logic
+// app.js — Dashboard logic (ALPHA-SORTED)
 // ===============================
 
 // --- DB Client (attached on each page by index.html) ---
@@ -8,8 +8,11 @@ let db; // set inside DOMContentLoaded
 // --- In-memory cache of projects for the UI ---
 let projects = [];
 
+// Case-insensitive name sorter
+const byName = (a, b) =>
+  (a.name || '').localeCompare((b.name || ''), undefined, { sensitivity: 'base' });
+
 // --- Data-access helpers ------------------------------------------
-// Load all projects from Supabase (newest first)
 async function dbLoadProjects() {
   const { data, error } = await db
     .from('projects')
@@ -17,7 +20,6 @@ async function dbLoadProjects() {
     .order('created_at', { ascending: false });
   if (error) throw error;
 
-  // Normalize for UI consumption
   return data.map(r => ({
     id: r.id,
     name: r.name,
@@ -26,8 +28,8 @@ async function dbLoadProjects() {
     startDate: r.start_date ?? '',
     status: r.status ?? 'active',
     abandon_reason: r.abandon_reason ?? null,
-    completed_at: r.completed_at ?? null,         // for counters
-    completion_notes: r.completion_notes ?? null, // (optional, not shown here)
+    completed_at: r.completed_at ?? null,
+    completion_notes: r.completion_notes ?? null,
     created_at: r.created_at
   }));
 }
@@ -45,13 +47,13 @@ async function dbInsertProject(p) {
 }
 
 // --- Rendering -----------------------------------------------------
-// Render only ACTIVE projects in the grid
+// Render only ACTIVE projects in the grid, ALPHA by name
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
 
-  const activeList = projects.filter(
-    p => p.status !== 'completed' && p.status !== 'abandoned'
-  );
+  const activeList = projects
+    .filter(p => p.status !== 'completed' && p.status !== 'abandoned')
+    .sort(byName);
 
   grid.innerHTML = activeList.map(p => `
     <div class="dashboard-card"
@@ -84,19 +86,19 @@ function updateCounters() {
   document.getElementById('pastDueCounter').querySelector('h2').textContent = pastDue;
 }
 
-// --- Search (active projects only) --------------------------------
+// --- Search (active projects only), ALPHA results ------------------
 function setupSearch() {
   const input = document.getElementById('searchInput');
   input.addEventListener('input', () => {
-    const term = input.value.toLowerCase();
+    const term = (input.value || '').toLowerCase();
 
-    const activeList = projects.filter(
-      p => p.status !== 'completed' && p.status !== 'abandoned'
-    );
+    const activeList = projects
+      .filter(p => p.status !== 'completed' && p.status !== 'abandoned');
 
-    const list = term
+    const list = (term
       ? activeList.filter(p => (p.name || '').toLowerCase().includes(term))
-      : activeList;
+      : activeList
+    ).sort(byName);
 
     const grid = document.getElementById("projectGrid");
     grid.innerHTML = list.map(p => `
@@ -153,7 +155,7 @@ form.addEventListener('submit', async (e) => {
   try {
     await dbInsertProject(newProj);
     projects = await dbLoadProjects();
-    renderProjects();
+    renderProjects();     // grid re-renders alpha
     updateCounters();
     modal.style.display = 'none';
     form.reset();
@@ -178,7 +180,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     projects = [];
   }
 
-  renderProjects();
+  renderProjects();  // alpha-sorted
   updateCounters();
   setupSearch();
   setupRealtime();
