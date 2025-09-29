@@ -1,5 +1,5 @@
 // ===============================
-// app.js — Dashboard logic (ALPHA-SORTED)
+// app.js — Dashboard logic (ALPHA-SORTED + duplicate-name guard)
 // ===============================
 
 // --- DB Client (attached on each page by index.html) ---
@@ -143,14 +143,29 @@ window.addEventListener("click", e => { if (e.target === modal) modal.style.disp
 
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
+  const nameRaw = document.getElementById('projectNameInput').value;
+  const normalizedName = nameRaw.trim().replace(/\s+/g, ' ');
   const newProj = {
-    name: document.getElementById('projectNameInput').value.trim(),
+    name: normalizedName,
     designer: document.getElementById('designerSelect').value,
     type: document.getElementById('projectType').value,
     startDate: document.getElementById('startDateInput').value,
     status: 'active'
   };
   if (!newProj.name) return;
+
+  // --- Duplicate-name guard (case-insensitive) --------------------
+  const dup = projects.some(
+    p => (p.name || '').trim().toLowerCase() === newProj.name.toLowerCase()
+  );
+  if (dup) {
+    alert(
+      'A project with that name already exists.\n\n' +
+      'Please add more info to make it unique (e.g., address, client, or date).'
+    );
+    document.getElementById('projectNameInput').focus();
+    return;
+  }
 
   try {
     await dbInsertProject(newProj);
