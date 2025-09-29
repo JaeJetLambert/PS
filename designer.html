@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Designer Projects</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* small page-local styles (can move to style.css later) */
+    .designer-title { padding: 1.25rem 2rem 0; }
+  </style>
+</head>
+<body class="dashboard-body">
+
+  <!-- Shared header/nav -->
+  <header class="dashboard-header">
+    <h1 class="designer-title" id="designerPageTitle">Designer Projects</h1>
+    <nav class="dashboard-nav">
+      <a href="index.html">Dashboard</a>
+      <a href="completed.html">Completed</a>
+      <div class="designer-dropdown">
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <!-- these links will work after we update navs next step -->
+          <a href="designer.html?name=Sarah">Sarah</a>
+          <a href="designer.html?name=Darby">Darby</a>
+          <a href="designer.html?name=Adaline">Adaline</a>
+        </div>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Counters for THIS designer -->
+    <section class="summary-cards">
+      <div class="card" id="activeCounter">
+        <h3>Active</h3>
+        <h2>0</h2>
+      </div>
+      <div class="card" id="completedCounter">
+        <h3>Completed (This Year)</h3>
+        <h2>0</h2>
+      </div>
+      <div class="card" id="pastDueCounter">
+        <h3>Past Due</h3>
+        <h2>0</h2>
+      </div>
+    </section>
+
+    <!-- Controls -->
+    <section class="dashboard-controls">
+      <input type="text" id="searchInput" placeholder="Search this designer's projects..." />
+    </section>
+
+    <!-- Active grid -->
+    <section>
+      <h2 style="padding:1rem 2rem 0;">Active Projects</h2>
+      <div class="dashboard-grid" id="designerActiveGrid"></div>
+    </section>
+
+    <!-- Completed grid -->
+    <section>
+      <h2 style="padding:1rem 2rem 0;">Completed Projects</h2>
+      <div class="dashboard-grid" id="designerCompletedGrid"></div>
+    </section>
+  </main>
+
+  <!-- Supabase client (must be above designer.js) -->
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    window.supabase = createClient(
+      'https://cdrinxjwnzetcfvicwml.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY'
+    );
+  </script>
+
+  <!-- Page logic -->
+  <script src="designer.js" defer></script>
+</body>
+</html>
