@@ -1,9 +1,9 @@
 // ===============================
-// tasks.js — per-project tasks UI + seeding from template
+// tasks.js — per-project tasks UI (auto-seed from template)
 // ===============================
 const TASK_USERS = ['Sarah','Darby','Adaline','Admin']; // quick list for reassignment
 
-// Wait for project.js to tell us which project is loaded
+// project.js dispatches this after it loads the project
 document.addEventListener('projectLoaded', (ev) => {
   const project = ev.detail;
   initTasksUI(project);
@@ -14,51 +14,47 @@ async function initTasksUI(project) {
   if (!db || !project?.id) return;
 
   const listEl = document.getElementById('taskList');
-  // Replace placeholder with a real controls bar + table shell
   listEl.innerHTML = `
-    <div id="taskControls" style="display:flex; gap:.5rem; margin:.5rem 0 1rem;">
-      <button id="seedFromTemplateBtn" class="save-btn">Seed Tasks from Template</button>
-      <span id="tasksMsg" style="align-self:center; opacity:.7;"></span>
-    </div>
     <div class="info-card" style="padding:0;">
       <table id="tasksTable" style="width:100%; border-collapse:collapse;">
         <thead>
           <tr style="border-bottom:1px solid #e6e8ee;">
-            <th style="text-align:left; padding:.6rem;">Done</th>
+            <th style="text-align:left; padding:.6rem; width:70px;">Done</th>
             <th style="text-align:left; padding:.6rem;">Task</th>
-            <th style="text-align:left; padding:.6rem;">Role</th>
-            <th style="text-align:left; padding:.6rem;">Assignee</th>
-            <th style="text-align:left; padding:.6rem;">Due</th>
+            <th style="text-align:left; padding:.6rem; width:120px;">Role</th>
+            <th style="text-align:left; padding:.6rem; width:160px;">Assignee</th>
+            <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
           </tr>
         </thead>
         <tbody id="tasksBody"></tbody>
       </table>
     </div>
+    <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
   `;
 
-  // Load & render
+  // Load existing tasks
   let tasks = await loadTasks(db, project.id);
-  renderTasks(tasks, project);
 
-  // Seed button
-  document.getElementById('seedFromTemplateBtn').addEventListener('click', async () => {
+  // If none exist (older projects), auto-seed from the template, then reload
+  if (!tasks.length) {
     try {
       await seedFromTemplate(db, project);
       tasks = await loadTasks(db, project.id);
-      renderTasks(tasks, project);
-      flash('Seeded tasks from template.');
+      flash('Task list created from template.');
     } catch (e) {
-      alert('Seeding failed: ' + e.message);
-      console.error(e);
+      console.error('Auto-seed failed:', e);
+      flash('Could not create tasks from template. Please try again later.');
     }
-  });
+  }
+
+  renderTasks(tasks);
 }
 
 function flash(msg) {
   const el = document.getElementById('tasksMsg');
   if (!el) return;
-  el.textContent = msg;
-  setTimeout(() => (el.textContent = ''), 2500);
+  el.textContent = msg || '';
+  if (msg) setTimeout(() => (el.textContent = ''), 2500);
 }
 
 async function loadTasks(db, projectId) {
@@ -71,28 +67,28 @@ async function loadTasks(db, projectId) {
   return data || [];
 }
 
-function renderTasks(tasks, project) {
+function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
-  const options = TASK_USERS
-    .map(u => `<option value="${u}">${u}</option>`)
-    .join('');
-  body.innerHTML = tasks.map(t => `
-    <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-      <td style="padding:.5rem .6rem;">
-        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
-      </td>
-      <td style="padding:.5rem .6rem;">${t.title}</td>
-      <td style="padding:.5rem .6rem; opacity:.8;">${t.role}</td>
-      <td style="padding:.5rem .6rem;">
-        <select data-action="assign">
-          ${options.replace(`value="${t.assignee}"`, `value="${t.assignee}" selected`)}
-        </select>
-      </td>
-      <td style="padding:.5rem .6rem;">
-        <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
-      </td>
-    </tr>
-  `).join('');
+  body.innerHTML = tasks.map(t => {
+    const options = TASK_USERS.map(u =>
+      `<option value="${u}" ${t.assignee === u ? 'selected' : ''}>${u}</option>`
+    ).join('');
+    return `
+      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+        <td style="padding:.5rem .6rem;">
+          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+        </td>
+        <td style="padding:.5rem .6rem;">${t.title}</td>
+        <td style="padding:.5rem .6rem; opacity:.8;">${t.role}</td>
+        <td style="padding:.5rem .6rem;">
+          <select data-action="assign">${options}</select>
+        </td>
+        <td style="padding:.5rem .6rem;">
+          <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+        </td>
+      </tr>
+    `;
+  }).join('');
 
   // Wire row controls
   body.querySelectorAll('tr').forEach(row => {
@@ -112,8 +108,7 @@ function renderTasks(tasks, project) {
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null; // 'YYYY-MM-DD' or ''
       await updateTaskDue(id, v);
-      // If this task anchors others, bump them too
-      await cascadeDependents(id);
+      await cascadeDependents(id);      // bump dependents if this is an anchor
       flash('Due date updated.');
     });
   });
@@ -147,7 +142,7 @@ async function cascadeDependents(anchorTaskId) {
     .select('due_date').eq('id', anchorTaskId).limit(1);
   if (e1) throw e1;
   const anchorDate = anchorRows?.[0]?.due_date || null;
-  if (!anchorDate) return; // nothing to cascade from
+  if (!anchorDate) return;
 
   // 2) Get dependents
   const { data: deps, error: e2 } = await db.from('task_dependencies')
@@ -172,7 +167,6 @@ async function seedFromTemplate(db, project) {
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) throw error;
-
   if (!tmpl || !tmpl.length) throw new Error('No task templates found.');
 
   // 2) Prepare inserts
@@ -183,10 +177,10 @@ async function seedFromTemplate(db, project) {
     role: t.role,
     assignee: t.role === 'Designer' ? (project.designer || null) : 'Admin',
     status: 'todo',
-    due_date: null, // manual & offset start unscheduled; offsets fill when anchors get dates
+    due_date: null
   }));
 
-  // 3) Insert all tasks and get ids back
+  // 3) Insert tasks and get ids back
   const { data: created, error: e1 } = await db
     .from('tasks')
     .insert(toInsert)
