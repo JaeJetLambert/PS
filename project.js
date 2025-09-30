@@ -285,5 +285,8 @@ reactivateBtn.addEventListener('click', async () => {
     console.error(e);
     project = null;
   }
-  renderInfo();
+    renderInfo();
+
+  // 👇 notify tasks.js that the project is ready
+  document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
 })();
