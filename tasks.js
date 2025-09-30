@@ -26,16 +26,16 @@ async function initTasksUI(project) {
   if (!db || !project?.id) return;
 
   const listEl = document.getElementById('taskList');
-  listEl.innerHTML = `
+listEl.innerHTML = `
   <div class="info-card" style="padding:0;">
     <table id="tasksTable" style="width:100%; border-collapse:collapse;">
       <thead>
         <tr style="border-bottom:1px solid #e6e8ee;">
-          <th style="text-align:left; padding:.6rem; width:70px;">Done</th>
+          <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
           <th style="text-align:left; padding:.6rem;">Task</th>
-          <th style="text-align:left; padding:.6rem; width:160px;">Assignee</th>
           <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
           <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
+          <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
         </tr>
       </thead>
       <tbody id="tasksBody"></tbody>
@@ -81,24 +81,24 @@ async function loadTasks(db, projectId) {
 
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
-  body.innerHTML = tasks.map(t => {
+ body.innerHTML = tasks.map(t => {
   const options = TASK_USERS.map(u =>
     `<option value="${u}" ${t.assignee === u ? 'selected' : ''}>${u}</option>`
   ).join('');
   return `
     <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
       <td style="padding:.5rem .6rem;">
-        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+        <select data-action="assign" style="min-width:160px;">${options}</select>
       </td>
       <td style="padding:.5rem .6rem;">${t.title}</td>
-      <td style="padding:.5rem .6rem;">
-        <select data-action="assign">${options}</select>
-      </td>
       <td style="padding:.5rem .6rem;">
         <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
       </td>
       <td style="padding:.5rem .6rem;">
         <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+      </td>
+      <td style="padding:.5rem .6rem; text-align:center;">
+        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
       </td>
     </tr>
   `;
