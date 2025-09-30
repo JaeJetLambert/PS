@@ -87,14 +87,14 @@ body {
   border-color: var(--bar-accent);
 }
 
-/* Designer dropdown trigger = looks like a link */
+/* Designer dropdown (click-to-open, stable on all pages) */
 .designer-dropdown { position: relative; }
+
 .dropbtn {
   background: transparent;
   color: var(--bar-ink);
   border: none;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
   padding: .2rem 0;
   cursor: pointer;
   font: inherit;
@@ -104,7 +104,6 @@ body {
 }
 .dropbtn:hover { color: #fff; border-color: var(--bar-accent); }
 
-/* Dropdown panel (still white for readability) */
 .dropdown-content {
   position: absolute;
   right: 0;
@@ -115,10 +114,17 @@ body {
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   padding: .35rem;
-  display: none;
-  z-index: 10;
+  display: none;            /* hidden by default */
+  z-index: 1000;            /* ensure above header/tools */
 }
-.designer-dropdown:hover .dropdown-content { display: block; }
+
+/* SHOW the panel when dropdown has .open (set by JS) or when focused */
+.designer-dropdown.open .dropdown-content,
+.designer-dropdown:focus-within .dropdown-content {
+  display: block;
+}
+
+/* Dropdown items */
 .dropdown-content a {
   display: block;
   padding: .55rem .7rem;
