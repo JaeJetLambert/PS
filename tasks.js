@@ -27,22 +27,22 @@ async function initTasksUI(project) {
 
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = `
-    <div class="info-card" style="padding:0;">
-      <table id="tasksTable" style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="border-bottom:1px solid #e6e8ee;">
-            <th style="text-align:left; padding:.6rem; width:70px;">Done</th>
-            <th style="text-align:left; padding:.6rem;">Task</th>
-            <th style="text-align:left; padding:.6rem; width:120px;">Role</th>
-            <th style="text-align:left; padding:.6rem; width:160px;">Assignee</th>
-            <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
-          </tr>
-        </thead>
-        <tbody id="tasksBody"></tbody>
-      </table>
-    </div>
-    <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
-  `;
+  <div class="info-card" style="padding:0;">
+    <table id="tasksTable" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:1px solid #e6e8ee;">
+          <th style="text-align:left; padding:.6rem; width:70px;">Done</th>
+          <th style="text-align:left; padding:.6rem;">Task</th>
+          <th style="text-align:left; padding:.6rem; width:160px;">Assignee</th>
+          <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
+          <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
+        </tr>
+      </thead>
+      <tbody id="tasksBody"></tbody>
+    </table>
+  </div>
+  <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
+`;
 
   // Load existing tasks
   let tasks = await loadTasks(db, project.id);
@@ -82,25 +82,27 @@ async function loadTasks(db, projectId) {
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
   body.innerHTML = tasks.map(t => {
-    const options = TASK_USERS.map(u =>
-      `<option value="${u}" ${t.assignee === u ? 'selected' : ''}>${u}</option>`
-    ).join('');
-    return `
-      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-        <td style="padding:.5rem .6rem;">
-          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
-        </td>
-        <td style="padding:.5rem .6rem;">${t.title}</td>
-        <td style="padding:.5rem .6rem; opacity:.8;">${t.role}</td>
-        <td style="padding:.5rem .6rem;">
-          <select data-action="assign">${options}</select>
-        </td>
-        <td style="padding:.5rem .6rem;">
-          <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
-        </td>
-      </tr>
-    `;
-  }).join('');
+  const options = TASK_USERS.map(u =>
+    `<option value="${u}" ${t.assignee === u ? 'selected' : ''}>${u}</option>`
+  ).join('');
+  return `
+    <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+      <td style="padding:.5rem .6rem;">
+        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+      </td>
+      <td style="padding:.5rem .6rem;">${t.title}</td>
+      <td style="padding:.5rem .6rem;">
+        <select data-action="assign">${options}</select>
+      </td>
+      <td style="padding:.5rem .6rem;">
+        <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
+      </td>
+      <td style="padding:.5rem .6rem;">
+        <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+      </td>
+    </tr>
+  `;
+}).join('');
 
   // Wire row controls
   body.querySelectorAll('tr').forEach(row => {
@@ -123,6 +125,13 @@ function renderTasks(tasks) {
       await cascadeDependents(id);      // bump dependents if this is an anchor
       flash('Due date updated.');
     });
+
+    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+  const v = e.target.value || null; // 'YYYY-MM-DD' or null
+  await updateTaskStart(id, v);
+  // (No cascading on start date for now)
+  flash('Start date updated.');
+});
   });
 }
 
@@ -138,6 +147,12 @@ async function updateTaskStatus(taskId, status) {
 async function updateTaskAssignee(taskId, who) {
   const db = window.supabase;
   const { error } = await db.from('tasks').update({ assignee: who }).eq('id', taskId);
+  if (error) throw error;
+}
+
+async function updateTaskStart(taskId, dateStr /* or null */) {
+  const db = window.supabase;
+  const { error } = await db.from('tasks').update({ start_date: dateStr }).eq('id', taskId);
   if (error) throw error;
 }
 
