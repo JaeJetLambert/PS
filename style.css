@@ -319,3 +319,64 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   .dashboard-grid{ padding: 1rem 1rem 2rem; }
   .project-details{ padding: .6rem 1rem 2rem; }
 }
+/* --- Tasks assignee dropdown --- */
+.assignee-cell { position: relative; }
+.assignee-box {
+  border: 1px solid #d0d5dd;
+  padding: .4rem .6rem;
+  border-radius: 8px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem;
+  cursor: pointer;
+  min-height: 34px;
+}
+.assignee-box .caret { opacity: .6; }
+.assignee-menu {
+  position: absolute;
+  z-index: 20;
+  top: 105%;
+  left: 0;
+  min-width: 260px;
+  background: #fff;
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: .5rem;
+  box-shadow: 0 8px 24px rgba(16,24,40,.12);
+}
+.assignee-menu.hidden { display: none; }
+.assignee-menu .assignee-list {
+  max-height: 220px;
+  overflow: auto;
+  padding: .25rem;
+}
+.assignee-menu label {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .25rem .25rem;
+  border-radius: 6px;
+}
+.assignee-menu label:hover { background: #f6f8fb; }
+.assignee-actions {
+  display: flex;
+  gap: .5rem;
+  justify-content: flex-end;
+  padding-top: .5rem;
+  border-top: 1px solid #eef2f7;
+  margin-top: .5rem;
+}
+.assignee-actions button {
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  border-radius: 6px;
+  padding: .35rem .6rem;
+  cursor: pointer;
+}
+.assignee-actions button[data-action="assignee-apply"] {
+  background: #2d6a4f;
+  color: #fff;
+  border-color: #2d6a4f;
+}

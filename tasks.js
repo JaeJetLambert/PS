@@ -7,6 +7,8 @@ const TASK_USERS = [
   'Client','Ellen','Jessica'
 ];
 
+let _openAssigneeRow = null; // which task row's menu is open
+
 // Map role string to default assignees array
 function computeDefaultAssignees(role, project) {
   if (!role) return [];
@@ -38,25 +40,22 @@ async function initTasksUI(project) {
 
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = `
-    <div class="info-card" style="padding:0;">
-      <table id="tasksTable" style="width:100%; border-collapse:collapse;">
-        <thead>
-          <tr style="border-bottom:1px solid #e6e8ee;">
-            <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
-            <th style="text-align:left; padding:.6rem;">Task</th>
-            <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
-            <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
-            <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
-          </tr>
-        </thead>
-        <tbody id="tasksBody"></tbody>
-      </table>
-    </div>
-    <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
-    <div style="opacity:.6; font-size:.85rem; margin-top:.25rem;">
-      Tip: Hold <strong>Ctrl/⌘</strong> to select multiple assignees.
-    </div>
-  `;
+  <div class="info-card" style="padding:0;">
+    <table id="tasksTable" style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="border-bottom:1px solid #e6e8ee;">
+          <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
+          <th style="text-align:left; padding:.6rem;">Task</th>
+          <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
+          <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
+          <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
+        </tr>
+      </thead>
+      <tbody id="tasksBody"></tbody>
+    </table>
+  </div>
+  <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
+`;
 
   // Load existing tasks
   let tasks = await loadTasks(db, project.id);
@@ -99,13 +98,29 @@ function renderTasks(tasks) {
     const selected = Array.isArray(t.assignees)
       ? t.assignees
       : (t.assignee ? [t.assignee] : []);
-    const options = TASK_USERS.map(u =>
-      `<option value="${u}" ${selected.includes(u) ? 'selected' : ''}>${u}</option>`
-    ).join('');
+    const label = selected.length ? selected.join(', ') : '— Select —';
+
     return `
       <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-        <td style="padding:.5rem .6rem;">
-          <select data-action="assign" multiple size="4" style="min-width:180px;">${options}</select>
+        <td class="assignee-cell" style="padding:.5rem .6rem;">
+          <div class="assignee-box" data-action="assignee-toggle">
+            <span class="assignee-label">${label}</span>
+            <span class="caret">▾</span>
+          </div>
+          <div class="assignee-menu hidden">
+            <div class="assignee-list">
+              ${TASK_USERS.map(u => `
+                <label>
+                  <input type="checkbox" value="${u}" ${selected.includes(u) ? 'checked' : ''}/>
+                  ${u}
+                </label>
+              `).join('')}
+            </div>
+            <div class="assignee-actions">
+              <button type="button" data-action="assignee-apply">Apply</button>
+              <button type="button" data-action="assignee-clear">Clear</button>
+            </div>
+          </div>
         </td>
         <td style="padding:.5rem .6rem;">${t.title}</td>
         <td style="padding:.5rem .6rem;">
@@ -125,22 +140,43 @@ function renderTasks(tasks) {
   body.querySelectorAll('tr').forEach(row => {
     const id = row.getAttribute('data-id');
 
-    row.querySelector('[data-action="assign"]').addEventListener('change', async (e) => {
-      const values = Array.from(e.target.selectedOptions).map(o => o.value);
+    // Open/close menu
+    row.querySelector('[data-action="assignee-toggle"]').addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleAssigneeMenu(row);
+    });
+
+    // Apply selection
+    row.querySelector('[data-action="assignee-apply"]').addEventListener('click', async () => {
+      const values = Array.from(row.querySelectorAll('.assignee-menu input[type="checkbox"]:checked'))
+        .map(ch => ch.value);
       await updateTaskAssignees(id, values);
+      // Update label
+      row.querySelector('.assignee-label').textContent = values.length ? values.join(', ') : '— Select —';
+      closeAssigneeMenus();
       flash('Assignees updated.');
     });
 
+    // Clear selection
+    row.querySelector('[data-action="assignee-clear"]').addEventListener('click', async () => {
+      Array.from(row.querySelectorAll('.assignee-menu input[type="checkbox"]')).forEach(ch => ch.checked = false);
+      await updateTaskAssignees(id, []);
+      row.querySelector('.assignee-label').textContent = '— Select —';
+      closeAssigneeMenus();
+      flash('Assignees cleared.');
+    });
+
+    // Start / Due / Done
     row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null; // 'YYYY-MM-DD' or null
+      const v = e.target.value || null;
       await updateTaskStart(id, v);
       flash('Start date updated.');
     });
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null; // 'YYYY-MM-DD' or ''
+      const v = e.target.value || null;
       await updateTaskDue(id, v);
-      await cascadeDependents(id);      // bump dependents if this is an anchor
+      await cascadeDependents(id);
       flash('Due date updated.');
     });
 
@@ -150,6 +186,40 @@ function renderTasks(tasks) {
       flash(checked ? 'Marked complete.' : 'Marked todo.');
     });
   });
+
+  // Close menus when clicking anywhere else
+  document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
+}
+
+// --- Assignee menu helpers ---
+function toggleAssigneeMenu(row) {
+  const menu = row.querySelector('.assignee-menu');
+  if (!menu) return;
+
+  if (!menu.classList.contains('hidden')) {
+    // already open -> close
+    menu.classList.add('hidden');
+    _openAssigneeRow = null;
+    return;
+  }
+
+  // close any other open menu
+  closeAssigneeMenus();
+
+  // open this one
+  menu.classList.remove('hidden');
+  _openAssigneeRow = row.getAttribute('data-id');
+}
+
+function closeAssigneeMenus() {
+  document.querySelectorAll('.assignee-menu').forEach(m => m.classList.add('hidden'));
+  _openAssigneeRow = null;
+}
+
+function onGlobalClickCloseMenus(e) {
+  // If the click is inside an assignee-cell, ignore
+  if (e.target.closest('.assignee-cell')) return;
+  closeAssigneeMenus();
 }
 
 // ---- Mutations ----------------------------------------------------
