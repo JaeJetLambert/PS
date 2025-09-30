@@ -98,6 +98,14 @@ async function initTasksUI(project) {
   renderTasks(tasks);
 }
 
+// ensure stable order in the UI
+tasks = (tasks || []).slice().sort((a,b) => {
+  const pa = (a.position ?? 999999);
+  const pb = (b.position ?? 999999);
+  if (pa !== pb) return pa - pb;
+  return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+});
+
 function flash(msg) {
   const el = document.getElementById('tasksMsg');
   if (!el) return;
@@ -110,6 +118,7 @@ async function loadTasks(db, projectId) {
     .from('tasks')
     .select('*, task_dependencies:task_dependencies!task_dependencies_task_id_fkey (anchor_task_id, offset_days)')
     .eq('project_id', projectId)
+    .order('position', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
   if (error) throw error;
   return data || [];
@@ -370,19 +379,20 @@ async function seedFromTemplate(db, project) {
 
   // 2) Prepare inserts (smart default assignees)
   const toInsert = tmpl.map(t => {
-    const people = computeDefaultAssignees(t.role, project);
-    return {
-      project_id: project.id,
-      template_id: t.id,
-      title: t.title,
-      role: t.role,
-      assignee: people[0] || null,   // keep legacy column in sync
-      assignees: people,             // NEW array
-      status: 'todo',
-      due_date: null,
-      notes: null
-    };
-  });
+  const people = computeDefaultAssignees(t.role, project);
+  return {
+    project_id: project.id,
+    template_id: t.id,
+    title: t.title,
+    role: t.role,
+    assignee: people[0] || null,   // keep legacy single-assignee in sync
+    assignees: people,             // multi-assign
+    status: 'todo',
+    due_date: null,
+    notes: null,
+    position: t.position           // <-- keep stable order forever
+  };
+});
 
   // 3) Insert tasks and get ids back
   const { data: created, error: e1 } = await db
