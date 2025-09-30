@@ -35,40 +35,67 @@ body {
    Header / Nav
    ========================================================================== */
 .dashboard-header {
+  /* Layout: title at left, nav at top-right, tools under nav (right) */
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+
   background: linear-gradient(180deg, #f9fbfc 0%, #f4f7f9 100%);
   border-bottom: 1px solid var(--border);
   padding: .8rem 2rem 1rem;
 }
 .dashboard-header h1 {
+  grid-column: 1;
+  grid-row: 1;
   margin: 0;
   font-size: 1.4rem;
   letter-spacing: .2px;
 }
 .dashboard-nav {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+
   display: flex;
-  gap: 1rem;
+  gap: .6rem;
   align-items: center;
-  margin-top: .35rem;
+  margin: 0;           /* was margin-top before; not needed with grid */
 }
+
+/* Green nav pills */
 .dashboard-nav a {
   text-decoration: none;
-  color: var(--text);
-  padding: .4rem .7rem;
-  border-radius: var(--radius-sm);
-  transition: background .2s ease, color .2s ease;
+  background: var(--brand);
+  color: #fff;
+  padding: .42rem .8rem;
+  border: 1px solid var(--brand-600);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  transition: background .15s ease, transform .05s ease, box-shadow .2s ease;
 }
-.dashboard-nav a:hover { background: var(--brand-50); color: var(--brand-700); }
+.dashboard-nav a:hover {
+  background: var(--brand-600);
+  box-shadow: var(--shadow);
+}
+.dashboard-nav a:active {
+  transform: translateY(1px);
+}
 
 /* Designer dropdown */
 .designer-dropdown { position: relative; }
 .dropbtn {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: .4rem .7rem;
+  background: var(--brand);
+  color: #fff;
+  border: 1px solid var(--brand-600);
+  border-radius: 999px;
+  padding: .42rem .8rem;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+  transition: background .15s ease, transform .05s ease, box-shadow .2s ease;
 }
+.dropbtn:hover { background: var(--brand-600); box-shadow: var(--shadow); }
+.dropbtn:active { transform: translateY(1px); }
 .dropdown-content {
   position: absolute;
   right: 0;
@@ -94,8 +121,12 @@ body {
 
 /* Tools row under nav (search + new project) */
 .header-tools{
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: end;
+
   display:flex; justify-content:flex-end; align-items:center; gap:.6rem;
-  padding:.4rem 2rem 0;
+  padding:.4rem 0 0;   /* no extra side padding; header already has it */
 }
 .header-tools input[type="text"]{
   min-width:260px; padding:.55rem .7rem;
