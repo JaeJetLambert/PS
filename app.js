@@ -6,20 +6,15 @@
 //  + SMART default assignees from template role strings)
 // ===============================
 
-// --- DB Client (attached on each page by index.html) ---
-let db; // set inside DOMContentLoaded
+let db;               // Supabase client (set on DOMContentLoaded)
+let projects = [];    // In-memory cache for UI
 
-// --- In-memory cache of projects for the UI ---
-let projects = [];
-
-// Case-insensitive name sorter (projects by name)
+// --- Helpers: sorting, grouping, rendering small lists -------------
 const byName = (a, b) =>
   (a.name || '').localeCompare((b.name || ''), undefined, { sensitivity: 'base' });
 
-// Designer label normalizer for grouping
 const safeDesigner = (d) => (d && d.trim()) || 'Unassigned';
 
-// Group an array of projects -> [{ designer, count }] sorted A→Z
 function groupCountByDesigner(list) {
   const map = new Map();
   for (const p of list) {
@@ -31,7 +26,6 @@ function groupCountByDesigner(list) {
     .sort((a, b) => a.designer.localeCompare(b.designer, undefined, { sensitivity: 'base' }));
 }
 
-// Render a tiny list inside a counter card
 function renderMiniList(ulId, items) {
   const ul = document.getElementById(ulId);
   if (!ul) return;
@@ -39,12 +33,10 @@ function renderMiniList(ulId, items) {
     ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
     return;
   }
-  ul.innerHTML = items.map(it =>
-    `<li><span>${it.designer}</span><span>${it.count}</span></li>`
-  ).join('');
+  ul.innerHTML = items.map(it => `<li><span>${it.designer}</span><span>${it.count}</span></li>`).join('');
 }
 
-// --- Data-access helpers ------------------------------------------
+// --- Data access ---------------------------------------------------
 async function dbLoadProjects() {
   const { data, error } = await db
     .from('projects')
@@ -66,7 +58,7 @@ async function dbLoadProjects() {
   }));
 }
 
-// Insert a new project row and RETURN the created row (incl. id)
+// Insert and return created row
 async function dbInsertProject(p) {
   const { data, error } = await db
     .from('projects')
@@ -78,34 +70,42 @@ async function dbInsertProject(p) {
       status: p.status ?? 'active'
     })
     .select('*')
-    .single(); // <- return the inserted row
+    .single();
   if (error) throw error;
-  return data; // { id, name, designer, ... }
+  return data;
 }
 
-// --- Helper: choose default assignee from a template role string ---
-// ~line 120
+// --- Default assignee helpers -------------------------------------
+// (legacy single value — not used in seeding anymore, kept for reference)
 function computeDefaultAssignee(role, projectRow) {
   if (!role) return null;
-
-  // If any variant of "designer" appears, assign to the project's designer
-  if (role.toLowerCase().includes('designer')) {
-    return projectRow.designer || 'Designer';
-  }
-
-  // Otherwise take the first token before a comma or plus (e.g., "Jae + Katie" -> "Jae")
-  // and strip a trailing period (e.g., "Admin." -> "Admin")
-  let first = role.split(/[,+]/)[0].trim();
-  first = first.replace(/\.$/, '');
+  if (role.toLowerCase().includes('designer')) return projectRow.designer || 'Designer';
+  let first = role.split(/[,+]/)[0].trim().replace(/\.$/, '');
   if (!first) return null;
-
-  // Normalize common roles
   if (/^admin$/i.test(first)) return 'Admin';
-  return first; // e.g., "Katie", "Jae", "PM", "Client", "Trey", etc.
+  return first;
+}
+
+// Multi-assign version used in seeding
+function computeDefaultAssignees(role, projectRow) {
+  if (!role) return [];
+  const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (let p of parts) {
+    p = p.replace(/\.$/, '');
+    if (!p) continue;
+    if (p.toLowerCase().includes('designer')) {
+      out.push(projectRow.designer || 'Designer');
+    } else if (/^admin$/i.test(p)) {
+      out.push('Admin');
+    } else {
+      out.push(p);
+    }
+  }
+  return Array.from(new Set(out.filter(Boolean)));
 }
 
 // --- AUTO-SEED tasks from template for a newly created project ----
-// ~line 145
 async function dbSeedTasksFromTemplate(projectRow) {
   // 1) Load template rows in a stable order
   const { data: tmpl, error: e0 } = await db
@@ -116,16 +116,20 @@ async function dbSeedTasksFromTemplate(projectRow) {
   if (e0) throw e0;
   if (!tmpl || !tmpl.length) return; // nothing to seed
 
-  // 2) Prepare per-task inserts (smart default assignee)
-  const toInsert = tmpl.map(t => ({
-    project_id: projectRow.id,
-    template_id: t.id,
-    title: t.title,
-    role: t.role,
-    assignee: computeDefaultAssignee(t.role, projectRow),
-    status: 'todo',
-    due_date: null
-  }));
+  // 2) Prepare per-task inserts (smart default assignees)
+  const toInsert = tmpl.map(t => {
+    const people = computeDefaultAssignees(t.role, projectRow);
+    return {
+      project_id: projectRow.id,
+      template_id: t.id,
+      title: t.title,
+      role: t.role,
+      assignee: people[0] || null,  // keep legacy column in sync
+      assignees: people,            // NEW: array column
+      status: 'todo',
+      due_date: null
+    };
+  });
 
   // 3) Insert tasks and capture IDs
   const { data: created, error: e1 } = await db
@@ -134,7 +138,7 @@ async function dbSeedTasksFromTemplate(projectRow) {
     .select('id, template_id');
   if (e1) throw e1;
 
-  // 4) Build dependency rows from template offsets
+  // 4) Convert template offsets → real dependencies
   const idByTemplate = new Map(created.map(r => [r.template_id, r.id]));
   const deps = tmpl
     .filter(t => t.schedule_kind === 'offset' && t.anchor_template_id)
@@ -152,10 +156,8 @@ async function dbSeedTasksFromTemplate(projectRow) {
 }
 
 // --- Rendering -----------------------------------------------------
-// Render only ACTIVE projects in the grid, ALPHA by name
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
-
   const activeList = projects
     .filter(p => p.status !== 'completed' && p.status !== 'abandoned')
     .sort(byName);
@@ -174,15 +176,10 @@ function renderProjects() {
 function updateCounters() {
   const year = new Date().getFullYear();
 
-  // Active
-  const activeList = projects.filter(
-    p => p.status !== 'completed' && p.status !== 'abandoned'
-  );
-  const activeCount = activeList.length;
-  document.querySelector('#activeCounter h2').textContent = activeCount;
+  const activeList = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
+  document.querySelector('#activeCounter h2').textContent = activeList.length;
   renderMiniList('activeByDesigner', groupCountByDesigner(activeList));
 
-  // Completed (This Year)
   const completedThisYear = projects.filter(p =>
     p.status === 'completed' &&
     p.completed_at &&
@@ -191,21 +188,17 @@ function updateCounters() {
   document.querySelector('#completedCounter h2').textContent = completedThisYear.length;
   renderMiniList('completedByDesigner', groupCountByDesigner(completedThisYear));
 
-  // Past Due (placeholder for now)
-  const pastDueList = []; // TODO: compute from projects when rule is defined
+  const pastDueList = []; // TODO
   document.querySelector('#pastDueCounter h2').textContent = pastDueList.length;
   renderMiniList('pastDueByDesigner', groupCountByDesigner(pastDueList));
 }
 
-// --- Search (active projects only), ALPHA results ------------------
+// --- Search (active projects only) --------------------------------
 function setupSearch() {
   const input = document.getElementById('searchInput');
   input.addEventListener('input', () => {
     const term = (input.value || '').toLowerCase();
-
-    const activeList = projects
-      .filter(p => p.status !== 'completed' && p.status !== 'abandoned');
-
+    const activeList = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
     const list = (term
       ? activeList.filter(p => (p.name || '').toLowerCase().includes(term))
       : activeList
@@ -223,7 +216,7 @@ function setupSearch() {
   });
 }
 
-// --- Realtime: refresh dashboard whenever any row changes ----------
+// --- Realtime ------------------------------------------------------
 function setupRealtime() {
   const channel = db.channel('projects-live');
   channel
@@ -237,12 +230,11 @@ function setupRealtime() {
         } catch (e) {
           console.error('Realtime refresh failed:', e);
         }
-      }
-    )
+      })
     .subscribe();
 }
 
-// --- New Project Modal Logic --------------------------------------
+// --- New Project Modal --------------------------------------------
 const modal = document.getElementById("newProjectModal");
 const newBtn = document.getElementById("newProjectBtn");
 const closeModal = document.getElementById("closeModal");
@@ -265,24 +257,18 @@ form.addEventListener('submit', async (e) => {
   };
   if (!newProj.name) return;
 
-  // Duplicate-name guard (case-insensitive) — encourage disambiguation
+  // Duplicate-name guard
   const dup = projects.some(
     p => (p.name || '').trim().toLowerCase() === newProj.name.toLowerCase()
   );
   if (dup) {
-    alert(
-      'A project with that name already exists.\n\n' +
-      'Please add more info to make it unique (e.g., address, client, or date).'
-    );
+    alert('A project with that name already exists.\n\nPlease add more info to make it unique (e.g., address, client, or date).');
     document.getElementById('projectNameInput').focus();
     return;
   }
 
   try {
-    // 1) Create the project and get its id/designer back
     const created = await dbInsertProject(newProj);
-
-    // 2) Immediately seed tasks for this new project
     try {
       await dbSeedTasksFromTemplate(created);
     } catch (seedErr) {
@@ -290,12 +276,10 @@ form.addEventListener('submit', async (e) => {
       alert('Project saved, but tasks could not be seeded: ' + seedErr.message);
     }
 
-    // 3) Refresh dashboard
     projects = await dbLoadProjects();
     renderProjects();
     updateCounters();
 
-    // 4) Close/reset modal
     modal.style.display = 'none';
     form.reset();
   } catch (err) {
@@ -304,7 +288,7 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-// --- Page bootstrap ------------------------------------------------
+// --- Bootstrap -----------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
   db = window.supabase;
   if (!db) {
@@ -319,8 +303,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     projects = [];
   }
 
-  renderProjects();  // alpha-sorted
-  updateCounters();  // fills the per-designer mini-lists
+  renderProjects();
+  updateCounters();
   setupSearch();
   setupRealtime();
 });

@@ -1,20 +1,31 @@
 // ===============================
 // tasks.js — per-project tasks UI (auto-seed from template)
+// Multi-assign: assignees[] with multi-select UI
 // ===============================
 const TASK_USERS = [
   'Sarah','Darby','Adaline','Designer','Admin','Katie','Jae','PM','Trey',
   'Client','Ellen','Jessica'
-]; // quick list for reassignment
-function computeDefaultAssignee(role, project) {
-  if (!role) return null;
-  const r = role.toLowerCase();
-  if (r.includes('designer')) return project.designer || 'Designer';
-  let first = role.split(/[,+]/)[0].trim();
-  first = first.replace(/\.$/, '');
-  if (!first) return null;
-  if (/^admin$/i.test(first)) return 'Admin';
-  return first;
+];
+
+// Map role string to default assignees array
+function computeDefaultAssignees(role, project) {
+  if (!role) return [];
+  const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (let p of parts) {
+    p = p.replace(/\.$/, '');
+    if (!p) continue;
+    if (p.toLowerCase().includes('designer')) {
+      out.push(project.designer || 'Designer');
+    } else if (/^admin$/i.test(p)) {
+      out.push('Admin');
+    } else {
+      out.push(p);
+    }
+  }
+  return Array.from(new Set(out.filter(Boolean)));
 }
+
 // project.js dispatches this after it loads the project
 document.addEventListener('projectLoaded', (ev) => {
   const project = ev.detail;
@@ -26,23 +37,26 @@ async function initTasksUI(project) {
   if (!db || !project?.id) return;
 
   const listEl = document.getElementById('taskList');
-listEl.innerHTML = `
-  <div class="info-card" style="padding:0;">
-    <table id="tasksTable" style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="border-bottom:1px solid #e6e8ee;">
-          <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
-          <th style="text-align:left; padding:.6rem;">Task</th>
-          <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
-          <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
-          <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
-        </tr>
-      </thead>
-      <tbody id="tasksBody"></tbody>
-    </table>
-  </div>
-  <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
-`;
+  listEl.innerHTML = `
+    <div class="info-card" style="padding:0;">
+      <table id="tasksTable" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="border-bottom:1px solid #e6e8ee;">
+            <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
+            <th style="text-align:left; padding:.6rem;">Task</th>
+            <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
+            <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
+            <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
+          </tr>
+        </thead>
+        <tbody id="tasksBody"></tbody>
+      </table>
+    </div>
+    <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
+    <div style="opacity:.6; font-size:.85rem; margin-top:.25rem;">
+      Tip: Hold <strong>Ctrl/⌘</strong> to select multiple assignees.
+    </div>
+  `;
 
   // Load existing tasks
   let tasks = await loadTasks(db, project.id);
@@ -81,42 +95,46 @@ async function loadTasks(db, projectId) {
 
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
- body.innerHTML = tasks.map(t => {
-  const options = TASK_USERS.map(u =>
-    `<option value="${u}" ${t.assignee === u ? 'selected' : ''}>${u}</option>`
-  ).join('');
-  return `
-    <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-      <td style="padding:.5rem .6rem;">
-        <select data-action="assign" style="min-width:160px;">${options}</select>
-      </td>
-      <td style="padding:.5rem .6rem;">${t.title}</td>
-      <td style="padding:.5rem .6rem;">
-        <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
-      </td>
-      <td style="padding:.5rem .6rem;">
-        <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
-      </td>
-      <td style="padding:.5rem .6rem; text-align:center;">
-        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
-      </td>
-    </tr>
-  `;
-}).join('');
+  body.innerHTML = tasks.map(t => {
+    const selected = Array.isArray(t.assignees)
+      ? t.assignees
+      : (t.assignee ? [t.assignee] : []);
+    const options = TASK_USERS.map(u =>
+      `<option value="${u}" ${selected.includes(u) ? 'selected' : ''}>${u}</option>`
+    ).join('');
+    return `
+      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+        <td style="padding:.5rem .6rem;">
+          <select data-action="assign" multiple size="4" style="min-width:180px;">${options}</select>
+        </td>
+        <td style="padding:.5rem .6rem;">${t.title}</td>
+        <td style="padding:.5rem .6rem;">
+          <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
+        </td>
+        <td style="padding:.5rem .6rem;">
+          <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+        </td>
+        <td style="padding:.5rem .6rem; text-align:center;">
+          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+        </td>
+      </tr>
+    `;
+  }).join('');
 
   // Wire row controls
   body.querySelectorAll('tr').forEach(row => {
     const id = row.getAttribute('data-id');
 
-    row.querySelector('[data-action="toggleDone"]').addEventListener('change', async (e) => {
-      const checked = e.target.checked;
-      await updateTaskStatus(id, checked ? 'done' : 'todo');
-      flash(checked ? 'Marked complete.' : 'Marked todo.');
+    row.querySelector('[data-action="assign"]').addEventListener('change', async (e) => {
+      const values = Array.from(e.target.selectedOptions).map(o => o.value);
+      await updateTaskAssignees(id, values);
+      flash('Assignees updated.');
     });
 
-    row.querySelector('[data-action="assign"]').addEventListener('change', async (e) => {
-      await updateTaskAssignee(id, e.target.value);
-      flash('Assignee updated.');
+    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+      const v = e.target.value || null; // 'YYYY-MM-DD' or null
+      await updateTaskStart(id, v);
+      flash('Start date updated.');
     });
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
@@ -126,27 +144,27 @@ function renderTasks(tasks) {
       flash('Due date updated.');
     });
 
-    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-  const v = e.target.value || null; // 'YYYY-MM-DD' or null
-  await updateTaskStart(id, v);
-  // (No cascading on start date for now)
-  flash('Start date updated.');
-});
+    row.querySelector('[data-action="toggleDone"]').addEventListener('change', async (e) => {
+      const checked = e.target.checked;
+      await updateTaskStatus(id, checked ? 'done' : 'todo');
+      flash(checked ? 'Marked complete.' : 'Marked todo.');
+    });
   });
 }
 
 // ---- Mutations ----------------------------------------------------
+async function updateTaskAssignees(taskId, whoList) {
+  const db = window.supabase;
+  const first = (whoList && whoList.length) ? whoList[0] : null; // keep legacy 'assignee' in sync
+  const { error } = await db.from('tasks').update({ assignees: whoList, assignee: first }).eq('id', taskId);
+  if (error) throw error;
+}
+
 async function updateTaskStatus(taskId, status) {
   const db = window.supabase;
   const payload = { status };
   if (status === 'done') payload.completed_at = new Date().toISOString();
   const { error } = await db.from('tasks').update(payload).eq('id', taskId);
-  if (error) throw error;
-}
-
-async function updateTaskAssignee(taskId, who) {
-  const db = window.supabase;
-  const { error } = await db.from('tasks').update({ assignee: who }).eq('id', taskId);
   if (error) throw error;
 }
 
@@ -196,16 +214,20 @@ async function seedFromTemplate(db, project) {
   if (error) throw error;
   if (!tmpl || !tmpl.length) throw new Error('No task templates found.');
 
-  // 2) Prepare inserts (smart default assignee)
-  const toInsert = tmpl.map(t => ({
-    project_id: project.id,
-    template_id: t.id,
-    title: t.title,
-    role: t.role,
-    assignee: computeDefaultAssignee(t.role, project),
-    status: 'todo',
-    due_date: null
-  }));
+  // 2) Prepare inserts (smart default assignees)
+  const toInsert = tmpl.map(t => {
+    const people = computeDefaultAssignees(t.role, project);
+    return {
+      project_id: project.id,
+      template_id: t.id,
+      title: t.title,
+      role: t.role,
+      assignee: people[0] || null,   // keep legacy column in sync
+      assignees: people,             // NEW array
+      status: 'todo',
+      due_date: null
+    };
+  });
 
   // 3) Insert tasks and get ids back
   const { data: created, error: e1 } = await db
