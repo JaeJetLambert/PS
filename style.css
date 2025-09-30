@@ -380,12 +380,30 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   color: #fff;
   border-color: #2d6a4f;
 }
+
+/* --- Task Notes UX --- */
+.notes-cell { vertical-align: top; }
+
 .notes-input {
   width: 100%;
+  min-height: 34px;
   border: 1px solid #d0d5dd;
   border-radius: 8px;
   padding: .4rem .6rem;
-  resize: vertical;            /* allow expand if needed */
-  min-height: 34px;
   font: inherit;
+  background: #fff;
+  resize: none;          /* we auto-size via JS */
+  overflow: hidden;      /* no scrollbars while auto-sizing */
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+
+.notes-input.filled {
+  border-color: transparent;   /* looks like plain text once filled */
+  background: transparent;
+  box-shadow: none;
+}
+
+.notes-input:focus {
+  border-color: #2d6a4f;
+  box-shadow: 0 0 0 3px rgba(45,106,79,.15);
 }

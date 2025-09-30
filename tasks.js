@@ -1,21 +1,43 @@
 // ===============================
 // tasks.js — per-project tasks UI (auto-seed from template)
-// Multi-assign: assignees[] with multi-select UI
+// Columns: Assignee | Task | Done | Start | Due | Notes
+// - Multi-assign (assignees[]), compact checkbox dropdown
+// - Notes auto-grow + debounced autosave
+// - Cascading due dates from dependencies
 // ===============================
 const TASK_USERS = [
   'Sarah','Darby','Adaline','Designer','Admin','Katie','Jae','PM','Trey',
   'Client','Ellen','Jessica'
 ];
 
-let _openAssigneeRow = null; // which task row's menu is open
+let _openAssigneeRow = null; // which task row's assignee menu is open
 
-// Map role string to default assignees array
+// --- Helpers -------------------------------------------------------
+function debounce(fn, delay = 600) {
+  let t;
+  return (...args) => {
+    clearTimeout(t);
+    t = setTimeout(() => fn(...args), delay);
+  };
+}
+function autoResize(el) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+function esc(s) {
+  return (s ?? '').toString().replace(/[&<>"]/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]
+  ));
+}
+
+// Map role string to default assignees array (supports comma/plus combos)
 function computeDefaultAssignees(role, project) {
   if (!role) return [];
   const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
   const out = [];
   for (let p of parts) {
-    p = p.replace(/\.$/, '');
+    p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
     if (!p) continue;
     if (p.toLowerCase().includes('designer')) {
       out.push(project.designer || 'Designer');
@@ -40,25 +62,25 @@ async function initTasksUI(project) {
 
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = `
-  <div class="info-card" style="padding:0;">
-    <table id="tasksTable" style="width:100%; border-collapse:collapse; table-layout:fixed;">
-      <thead>
-        <tr style="border-bottom:1px solid #e6e8ee;">
-          <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
-          <th style="text-align:left; padding:.6rem; width:220px;">Task</th>
-          <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
-          <th style="text-align:left; padding:.6rem; width:150px;">Start</th>
-          <th style="text-align:left; padding:.6rem; width:150px;">Due</th>
-          <th style="text-align:left; padding:.6rem;">Notes</th>
-        </tr>
-      </thead>
-      <tbody id="tasksBody"></tbody>
-    </table>
-  </div>
-  <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
-`;
+    <div class="info-card" style="padding:0;">
+      <table id="tasksTable" style="width:100%; border-collapse:collapse; table-layout:fixed;">
+        <thead>
+          <tr style="border-bottom:1px solid #e6e8ee;">
+            <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
+            <th style="text-align:left; padding:.6rem; width:220px;">Task</th>
+            <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
+            <th style="text-align:left; padding:.6rem; width:150px;">Start</th>
+            <th style="text-align:left; padding:.6rem; width:150px;">Due</th>
+            <th style="text-align:left; padding:.6rem;">Notes</th>
+          </tr>
+        </thead>
+        <tbody id="tasksBody"></tbody>
+      </table>
+    </div>
+    <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
+  `;
 
-  // Load existing tasks
+  // Load existing tasks (includes notes)
   let tasks = await loadTasks(db, project.id);
 
   // If none exist (older projects), auto-seed from the template, then reload
@@ -93,70 +115,73 @@ async function loadTasks(db, projectId) {
   return data || [];
 }
 
+// --- Render --------------------------------------------------------
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
   body.innerHTML = tasks.map(t => {
-  const selected = Array.isArray(t.assignees)
-    ? t.assignees
-    : (t.assignee ? [t.assignee] : []);
-  const label = selected.length ? selected.join(', ') : '— Select —';
+    const selected = Array.isArray(t.assignees)
+      ? t.assignees
+      : (t.assignee ? [t.assignee] : []);
+    const label = selected.length ? selected.join(', ') : '— Select —';
 
-  return `
-    <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-      <!-- Assignee -->
-      <td class="assignee-cell" style="padding:.5rem .6rem;">
-        <div class="assignee-box" data-action="assignee-toggle">
-          <span class="assignee-label">${label}</span>
-          <span class="caret">▾</span>
-        </div>
-        <div class="assignee-menu hidden">
-          <div class="assignee-list">
-            ${TASK_USERS.map(u => `
-              <label>
-                <input type="checkbox" value="${u}" ${selected.includes(u) ? 'checked' : ''}/>
-                ${u}
-              </label>
-            `).join('')}
+    return `
+      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+        <!-- Assignee -->
+        <td class="assignee-cell" style="padding:.5rem .6rem;">
+          <div class="assignee-box" data-action="assignee-toggle" style="display:flex; align-items:center; gap:.35rem; cursor:pointer;">
+            <span class="assignee-label">${esc(label)}</span>
+            <span class="caret">▾</span>
           </div>
-          <div class="assignee-actions">
-            <button type="button" data-action="assignee-apply">Apply</button>
-            <button type="button" data-action="assignee-clear">Clear</button>
+          <div class="assignee-menu hidden" style="display:none; position:absolute; z-index:5; background:#fff; border:1px solid #d0d5dd; border-radius:8px; padding:.5rem; box-shadow:0 8px 24px rgba(0,0,0,.08);">
+            <div class="assignee-list" style="display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); gap:.25rem .75rem; max-height:220px; overflow:auto; padding:.25rem .25rem .5rem;">
+              ${TASK_USERS.map(u => `
+                <label style="display:flex; align-items:center; gap:.4rem; font-size:.95rem;">
+                  <input type="checkbox" value="${u}" ${selected.includes(u) ? 'checked' : ''}/>
+                  ${esc(u)}
+                </label>
+              `).join('')}
+            </div>
+            <div class="assignee-actions" style="display:flex; gap:.5rem; justify-content:flex-end;">
+              <button type="button" data-action="assignee-apply" class="save-btn" style="padding:.35rem .7rem;">Apply</button>
+              <button type="button" data-action="assignee-clear" class="btn" style="padding:.35rem .7rem;">Clear</button>
+            </div>
           </div>
-        </div>
-      </td>
+        </td>
 
-      <!-- Task -->
-      <td style="padding:.5rem .6rem;">${t.title}</td>
+        <!-- Task (smaller) -->
+        <td style="padding:.5rem .6rem;">${esc(t.title)}</td>
 
-      <!-- Done -->
-      <td style="padding:.5rem .6rem; text-align:center;">
-        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
-      </td>
+        <!-- Done -->
+        <td style="padding:.5rem .6rem; text-align:center;">
+          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+        </td>
 
-      <!-- Start -->
-      <td style="padding:.5rem .6rem;">
-        <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
-      </td>
+        <!-- Start -->
+        <td style="padding:.5rem .6rem;">
+          <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
+        </td>
 
-      <!-- Due -->
-      <td style="padding:.5rem .6rem;">
-        <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
-      </td>
+        <!-- Due -->
+        <td style="padding:.5rem .6rem;">
+          <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+        </td>
 
-      <!-- Notes -->
-      <td style="padding:.4rem .6rem;">
-        <textarea class="notes-input" rows="1" data-action="notes"
-                  placeholder="Add notes…">${t.notes ?? ''}</textarea>
-      </td>
-    </tr>
-  `;
-}).join('');
+        <!-- Notes (auto-grow, borderless when filled) -->
+        <td class="notes-cell" style="padding:.4rem .6rem;">
+          <textarea class="notes-input${(t.notes && String(t.notes).trim()) ? ' filled' : ''}"
+                    data-action="notes"
+                    rows="1"
+                    placeholder="Notes…">${esc(t.notes)}</textarea>
+        </td>
+      </tr>
+    `;
+  }).join('');
 
   // Wire row controls
   body.querySelectorAll('tr').forEach(row => {
     const id = row.getAttribute('data-id');
 
-    // Open/close menu
+    // Assignee dropdown open/close
     row.querySelector('[data-action="assignee-toggle"]').addEventListener('click', (e) => {
       e.stopPropagation();
       toggleAssigneeMenu(row);
@@ -182,7 +207,7 @@ function renderTasks(tasks) {
       flash('Assignees cleared.');
     });
 
-    // Start / Due / Done
+    // Start / Due
     row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
       await updateTaskStart(id, v);
@@ -192,55 +217,84 @@ function renderTasks(tasks) {
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
       await updateTaskDue(id, v);
-      await cascadeDependents(id);
+      await cascadeDependents(id); // if this is an anchor, bump dependents
       flash('Due date updated.');
     });
 
+    // Done
     row.querySelector('[data-action="toggleDone"]').addEventListener('change', async (e) => {
       const checked = e.target.checked;
       await updateTaskStatus(id, checked ? 'done' : 'todo');
       flash(checked ? 'Marked complete.' : 'Marked todo.');
     });
 
-    row.querySelector('[data-action="notes"]').addEventListener('change', async (e) => {
-  const text = (e.target.value || '').trim() || null;
-  await updateTaskNotes(id, text);
-  flash('Notes saved.');
-});
+    // Notes — auto-grow + debounced autosave + filled state
+    const notesEl = row.querySelector('[data-action="notes"]');
+    const saveNotes = debounce(async (txt) => {
+      const trimmed = (txt && txt.trim()) ? txt.trim() : null;
+      await updateTaskNotes(id, trimmed);
+    }, 600);
+
+    // initial size/state
+    autoResize(notesEl);
+    notesEl.classList.toggle('filled', (notesEl.value || '').trim().length > 0);
+
+    notesEl.addEventListener('input', (e) => {
+      autoResize(notesEl);
+      notesEl.classList.toggle('filled', e.target.value.trim().length > 0);
+      saveNotes(e.target.value);
+    });
+
+    notesEl.addEventListener('blur', async (e) => {
+      await updateTaskNotes(id, (e.target.value && e.target.value.trim()) ? e.target.value.trim() : null);
+    });
   });
 
   // Close menus when clicking anywhere else
   document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
 }
 
-// --- Assignee menu helpers ---
+// --- Assignee menu helpers ----------------------------------------
 function toggleAssigneeMenu(row) {
   const menu = row.querySelector('.assignee-menu');
   if (!menu) return;
 
-  if (!menu.classList.contains('hidden')) {
-    // already open -> close
+  const isOpen = menu.style.display !== 'none' && !menu.classList.contains('hidden');
+  if (isOpen) {
     menu.classList.add('hidden');
+    menu.style.display = 'none';
     _openAssigneeRow = null;
     return;
   }
 
-  // close any other open menu
+  // Close any other open menu
   closeAssigneeMenus();
 
-  // open this one
+  // Open this one near the trigger
   menu.classList.remove('hidden');
+  menu.style.display = 'block';
+
+  // Position relative to the assignee-box
+  const box = row.querySelector('.assignee-box');
+  const rect = box.getBoundingClientRect();
+  menu.style.position = 'absolute';
+  menu.style.marginTop = '.25rem';
+  // ensure the cell is relatively positioned so menu anchors correctly
+  row.querySelector('.assignee-cell').style.position = 'relative';
+
   _openAssigneeRow = row.getAttribute('data-id');
 }
 
 function closeAssigneeMenus() {
-  document.querySelectorAll('.assignee-menu').forEach(m => m.classList.add('hidden'));
+  document.querySelectorAll('.assignee-menu').forEach(m => {
+    m.classList.add('hidden');
+    m.style.display = 'none';
+  });
   _openAssigneeRow = null;
 }
 
 function onGlobalClickCloseMenus(e) {
-  // If the click is inside an assignee-cell, ignore
-  if (e.target.closest('.assignee-cell')) return;
+  if (e.target.closest('.assignee-cell')) return; // click was inside a menu/cell
   closeAssigneeMenus();
 }
 
@@ -248,7 +302,9 @@ function onGlobalClickCloseMenus(e) {
 async function updateTaskAssignees(taskId, whoList) {
   const db = window.supabase;
   const first = (whoList && whoList.length) ? whoList[0] : null; // keep legacy 'assignee' in sync
-  const { error } = await db.from('tasks').update({ assignees: whoList, assignee: first }).eq('id', taskId);
+  const { error } = await db.from('tasks')
+    .update({ assignees: whoList, assignee: first })
+    .eq('id', taskId);
   if (error) throw error;
 }
 
@@ -323,7 +379,8 @@ async function seedFromTemplate(db, project) {
       assignee: people[0] || null,   // keep legacy column in sync
       assignees: people,             // NEW array
       status: 'todo',
-      due_date: null
+      due_date: null,
+      notes: null
     };
   });
 
