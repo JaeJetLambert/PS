@@ -1,22 +1,30 @@
 /* =============================================================================
-   Global Theme + Resets
+   Theme
    ========================================================================== */
 :root{
+  /* neutrals */
   --bg: #f6f7fb;
   --surface: #ffffff;
   --text: #1b2430;
   --muted: #6b7280;
   --border: #e6e8ee;
 
+  /* brand greens */
   --brand: #198f7a;
   --brand-600: #167c6b;
   --brand-700: #116458;
   --brand-50: #e7f5f2;
 
+  /* top bar greens (darker) */
+  --bar: #1b4332;         /* deep green bar */
+  --bar-ink: #ecfdf5;     /* light ink on bar */
+  --bar-ink-dim: #d1fae5; /* dimmer ink */
+  --bar-accent: #2d6a4f;  /* hover/active underline */
+
+  /* shadows & radii */
   --shadow-sm: 0 1px 2px rgba(16,24,40,.06);
   --shadow:    0 2px 10px rgba(16,24,40,.08);
   --shadow-lg: 0 10px 20px rgba(16,24,40,.12);
-
   --radius: 14px;
   --radius-sm: 10px;
   --radius-lg: 20px;
@@ -32,18 +40,18 @@ body {
 }
 
 /* =============================================================================
-   Header / Nav
+   Header / Nav  — dark green top bar with inline links on the right
    ========================================================================== */
 .dashboard-header {
-  /* Layout: title at left, nav at top-right, tools under nav (right) */
   display: grid;
-  grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: 1fr auto;   /* title left, nav right */
+  grid-template-rows: auto auto;     /* row2 = tools */
   align-items: center;
 
-  background: linear-gradient(180deg, #f9fbfc 0%, #f4f7f9 100%);
-  border-bottom: 1px solid var(--border);
-  padding: .8rem 2rem 1rem;
+  background: var(--bar);
+  color: var(--bar-ink);
+  padding: .9rem 2rem 1rem;
+  box-shadow: 0 2px 12px rgba(0,0,0,.12);
 }
 .dashboard-header h1 {
   grid-column: 1;
@@ -51,55 +59,56 @@ body {
   margin: 0;
   font-size: 1.4rem;
   letter-spacing: .2px;
+  color: var(--bar-ink);
 }
+
+/* Nav: simple text links inside the bar, aligned right */
 .dashboard-nav {
   grid-column: 2;
   grid-row: 1;
   justify-self: end;
 
   display: flex;
-  gap: .6rem;
+  gap: 1rem;
   align-items: center;
-  margin: 0;           /* was margin-top before; not needed with grid */
+  margin: 0;
 }
-
-/* Green nav pills */
 .dashboard-nav a {
   text-decoration: none;
-  background: var(--brand);
-  color: #fff;
-  padding: .42rem .8rem;
-  border: 1px solid var(--brand-600);
-  border-radius: 999px;
-  box-shadow: var(--shadow-sm);
-  transition: background .15s ease, transform .05s ease, box-shadow .2s ease;
+  color: var(--bar-ink);
+  padding: .2rem 0;
+  border-bottom: 2px solid transparent;
+  transition: color .15s ease, border-color .15s ease, opacity .15s ease;
+  font-weight: 600;
+  letter-spacing: .2px;
 }
 .dashboard-nav a:hover {
-  background: var(--brand-600);
-  box-shadow: var(--shadow);
-}
-.dashboard-nav a:active {
-  transform: translateY(1px);
+  color: #ffffff;
+  border-color: var(--bar-accent);
 }
 
-/* Designer dropdown */
+/* Designer dropdown trigger = looks like a link */
 .designer-dropdown { position: relative; }
 .dropbtn {
-  background: var(--brand);
-  color: #fff;
-  border: 1px solid var(--brand-600);
-  border-radius: 999px;
-  padding: .42rem .8rem;
+  background: transparent;
+  color: var(--bar-ink);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: .2rem 0;
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: background .15s ease, transform .05s ease, box-shadow .2s ease;
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: .2px;
+  transition: color .15s ease, border-color .15s ease;
 }
-.dropbtn:hover { background: var(--brand-600); box-shadow: var(--shadow); }
-.dropbtn:active { transform: translateY(1px); }
+.dropbtn:hover { color: #fff; border-color: var(--bar-accent); }
+
+/* Dropdown panel (still white for readability) */
 .dropdown-content {
   position: absolute;
   right: 0;
-  top: calc(100% + 8px);
+  top: calc(100% + 10px);
   min-width: 220px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -119,14 +128,14 @@ body {
 }
 .dropdown-content a:hover { background: var(--brand-50); color: var(--brand-700); }
 
-/* Tools row under nav (search + new project) */
+/* Tools row under the bar, right-aligned */
 .header-tools{
   grid-column: 2;
   grid-row: 2;
   justify-self: end;
 
   display:flex; justify-content:flex-end; align-items:center; gap:.6rem;
-  padding:.4rem 0 0;   /* no extra side padding; header already has it */
+  padding:.45rem 0 0;
 }
 .header-tools input[type="text"]{
   min-width:260px; padding:.55rem .7rem;
@@ -243,6 +252,7 @@ body {
   user-select:none;
   box-shadow: var(--shadow-sm);
   color: #2a3140;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .tab.active{
   background: var(--brand-50);
@@ -287,18 +297,19 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
 
 .tasks-section h2{ margin:1.1rem 0 .6rem; }
 
+/* Section titles */
+.section-title { padding: 1rem 2rem 0; margin: 0; }
+
 /* =============================================================================
    Utilities
    ========================================================================== */
-.nav-link{ text-decoration:none; color: var(--brand-700); }
+.nav-link{ text-decoration:none; color: var(--bar-ink); }
 .nav-link:hover{ text-decoration:underline; }
 
 @media (max-width:640px){
   .dashboard-header{ padding: .8rem 1rem 1rem; }
-  .header-tools{ padding: .4rem 1rem 0; }
+  .header-tools{ padding: .45rem 0 0; }
   .summary-cards{ padding: 1rem 1rem 0; }
   .dashboard-grid{ padding: 1rem 1rem 2rem; }
   .project-details{ padding: .6rem 1rem 2rem; }
 }
-/* Section titles */
-.section-title { padding: 1rem 2rem 0; margin: 0; }
