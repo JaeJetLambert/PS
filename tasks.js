@@ -41,14 +41,15 @@ async function initTasksUI(project) {
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = `
   <div class="info-card" style="padding:0;">
-    <table id="tasksTable" style="width:100%; border-collapse:collapse;">
+    <table id="tasksTable" style="width:100%; border-collapse:collapse; table-layout:fixed;">
       <thead>
         <tr style="border-bottom:1px solid #e6e8ee;">
           <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
-          <th style="text-align:left; padding:.6rem;">Task</th>
-          <th style="text-align:left; padding:.6rem; width:160px;">Start</th>
-          <th style="text-align:left; padding:.6rem; width:160px;">Due</th>
+          <th style="text-align:left; padding:.6rem; width:220px;">Task</th>
           <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
+          <th style="text-align:left; padding:.6rem; width:150px;">Start</th>
+          <th style="text-align:left; padding:.6rem; width:150px;">Due</th>
+          <th style="text-align:left; padding:.6rem;">Notes</th>
         </tr>
       </thead>
       <tbody id="tasksBody"></tbody>
@@ -95,46 +96,61 @@ async function loadTasks(db, projectId) {
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
   body.innerHTML = tasks.map(t => {
-    const selected = Array.isArray(t.assignees)
-      ? t.assignees
-      : (t.assignee ? [t.assignee] : []);
-    const label = selected.length ? selected.join(', ') : '— Select —';
+  const selected = Array.isArray(t.assignees)
+    ? t.assignees
+    : (t.assignee ? [t.assignee] : []);
+  const label = selected.length ? selected.join(', ') : '— Select —';
 
-    return `
-      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-        <td class="assignee-cell" style="padding:.5rem .6rem;">
-          <div class="assignee-box" data-action="assignee-toggle">
-            <span class="assignee-label">${label}</span>
-            <span class="caret">▾</span>
+  return `
+    <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+      <!-- Assignee -->
+      <td class="assignee-cell" style="padding:.5rem .6rem;">
+        <div class="assignee-box" data-action="assignee-toggle">
+          <span class="assignee-label">${label}</span>
+          <span class="caret">▾</span>
+        </div>
+        <div class="assignee-menu hidden">
+          <div class="assignee-list">
+            ${TASK_USERS.map(u => `
+              <label>
+                <input type="checkbox" value="${u}" ${selected.includes(u) ? 'checked' : ''}/>
+                ${u}
+              </label>
+            `).join('')}
           </div>
-          <div class="assignee-menu hidden">
-            <div class="assignee-list">
-              ${TASK_USERS.map(u => `
-                <label>
-                  <input type="checkbox" value="${u}" ${selected.includes(u) ? 'checked' : ''}/>
-                  ${u}
-                </label>
-              `).join('')}
-            </div>
-            <div class="assignee-actions">
-              <button type="button" data-action="assignee-apply">Apply</button>
-              <button type="button" data-action="assignee-clear">Clear</button>
-            </div>
+          <div class="assignee-actions">
+            <button type="button" data-action="assignee-apply">Apply</button>
+            <button type="button" data-action="assignee-clear">Clear</button>
           </div>
-        </td>
-        <td style="padding:.5rem .6rem;">${t.title}</td>
-        <td style="padding:.5rem .6rem;">
-          <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
-        </td>
-        <td style="padding:.5rem .6rem;">
-          <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
-        </td>
-        <td style="padding:.5rem .6rem; text-align:center;">
-          <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
-        </td>
-      </tr>
-    `;
-  }).join('');
+        </div>
+      </td>
+
+      <!-- Task -->
+      <td style="padding:.5rem .6rem;">${t.title}</td>
+
+      <!-- Done -->
+      <td style="padding:.5rem .6rem; text-align:center;">
+        <input type="checkbox" ${t.status === 'done' ? 'checked' : ''} data-action="toggleDone"/>
+      </td>
+
+      <!-- Start -->
+      <td style="padding:.5rem .6rem;">
+        <input type="date" value="${t.start_date ?? ''}" data-action="start"/>
+      </td>
+
+      <!-- Due -->
+      <td style="padding:.5rem .6rem;">
+        <input type="date" value="${t.due_date ?? ''}" data-action="due"/>
+      </td>
+
+      <!-- Notes -->
+      <td style="padding:.4rem .6rem;">
+        <textarea class="notes-input" rows="1" data-action="notes"
+                  placeholder="Add notes…">${t.notes ?? ''}</textarea>
+      </td>
+    </tr>
+  `;
+}).join('');
 
   // Wire row controls
   body.querySelectorAll('tr').forEach(row => {
@@ -185,6 +201,12 @@ function renderTasks(tasks) {
       await updateTaskStatus(id, checked ? 'done' : 'todo');
       flash(checked ? 'Marked complete.' : 'Marked todo.');
     });
+
+    row.querySelector('[data-action="notes"]').addEventListener('change', async (e) => {
+  const text = (e.target.value || '').trim() || null;
+  await updateTaskNotes(id, text);
+  flash('Notes saved.');
+});
   });
 
   // Close menus when clicking anywhere else
@@ -247,6 +269,12 @@ async function updateTaskStart(taskId, dateStr /* or null */) {
 async function updateTaskDue(taskId, dateStr /* or null */) {
   const db = window.supabase;
   const { error } = await db.from('tasks').update({ due_date: dateStr }).eq('id', taskId);
+  if (error) throw error;
+}
+
+async function updateTaskNotes(taskId, text /* or null */) {
+  const db = window.supabase;
+  const { error } = await db.from('tasks').update({ notes: text }).eq('id', taskId);
   if (error) throw error;
 }
 

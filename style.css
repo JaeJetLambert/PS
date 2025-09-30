@@ -380,3 +380,12 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   color: #fff;
   border-color: #2d6a4f;
 }
+.notes-input {
+  width: 100%;
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: .4rem .6rem;
+  resize: vertical;            /* allow expand if needed */
+  min-height: 34px;
+  font: inherit;
+}
