@@ -2,7 +2,8 @@
 // app.js — Dashboard logic
 // (A→Z sorting + realtime + duplicate-name guard
 //  + per-designer breakdowns in counters
-//  + AUTO-SEED tasks from templates on project create)
+//  + AUTO-SEED tasks from templates on project create
+//  + SMART default assignees from template role strings)
 // ===============================
 
 // --- DB Client (attached on each page by index.html) ---
@@ -82,7 +83,29 @@ async function dbInsertProject(p) {
   return data; // { id, name, designer, ... }
 }
 
+// --- Helper: choose default assignee from a template role string ---
+// ~line 120
+function computeDefaultAssignee(role, projectRow) {
+  if (!role) return null;
+
+  // If any variant of "designer" appears, assign to the project's designer
+  if (role.toLowerCase().includes('designer')) {
+    return projectRow.designer || 'Designer';
+  }
+
+  // Otherwise take the first token before a comma or plus (e.g., "Jae + Katie" -> "Jae")
+  // and strip a trailing period (e.g., "Admin." -> "Admin")
+  let first = role.split(/[,+]/)[0].trim();
+  first = first.replace(/\.$/, '');
+  if (!first) return null;
+
+  // Normalize common roles
+  if (/^admin$/i.test(first)) return 'Admin';
+  return first; // e.g., "Katie", "Jae", "PM", "Client", "Trey", etc.
+}
+
 // --- AUTO-SEED tasks from template for a newly created project ----
+// ~line 145
 async function dbSeedTasksFromTemplate(projectRow) {
   // 1) Load template rows in a stable order
   const { data: tmpl, error: e0 } = await db
@@ -93,16 +116,13 @@ async function dbSeedTasksFromTemplate(projectRow) {
   if (e0) throw e0;
   if (!tmpl || !tmpl.length) return; // nothing to seed
 
-  // 2) Prepare per-task inserts
+  // 2) Prepare per-task inserts (smart default assignee)
   const toInsert = tmpl.map(t => ({
     project_id: projectRow.id,
     template_id: t.id,
     title: t.title,
     role: t.role,
-    // Default assignee rule:
-    //  - Designer tasks -> the project's designer
-    //  - Everything else -> 'Admin'
-    assignee: t.role === 'Designer' ? (projectRow.designer || null) : 'Admin',
+    assignee: computeDefaultAssignee(t.role, projectRow),
     status: 'todo',
     due_date: null
   }));
@@ -171,8 +191,8 @@ function updateCounters() {
   document.querySelector('#completedCounter h2').textContent = completedThisYear.length;
   renderMiniList('completedByDesigner', groupCountByDesigner(completedThisYear));
 
-  // Past Due (placeholder for now — will fill once we define the rule)
-  const pastDueList = []; // TODO: compute from projects when logic is defined
+  // Past Due (placeholder for now)
+  const pastDueList = []; // TODO: compute from projects when rule is defined
   document.querySelector('#pastDueCounter h2').textContent = pastDueList.length;
   renderMiniList('pastDueByDesigner', groupCountByDesigner(pastDueList));
 }

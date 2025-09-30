@@ -1,8 +1,20 @@
 // ===============================
 // tasks.js — per-project tasks UI (auto-seed from template)
 // ===============================
-const TASK_USERS = ['Sarah','Darby','Adaline','Admin']; // quick list for reassignment
-
+const TASK_USERS = [
+  'Sarah','Darby','Adaline','Designer','Admin','Katie','Jae','PM','Trey',
+  'Client','Ellen','Jessica'
+]; // quick list for reassignment
+function computeDefaultAssignee(role, project) {
+  if (!role) return null;
+  const r = role.toLowerCase();
+  if (r.includes('designer')) return project.designer || 'Designer';
+  let first = role.split(/[,+]/)[0].trim();
+  first = first.replace(/\.$/, '');
+  if (!first) return null;
+  if (/^admin$/i.test(first)) return 'Admin';
+  return first;
+}
 // project.js dispatches this after it loads the project
 document.addEventListener('projectLoaded', (ev) => {
   const project = ev.detail;
@@ -169,13 +181,13 @@ async function seedFromTemplate(db, project) {
   if (error) throw error;
   if (!tmpl || !tmpl.length) throw new Error('No task templates found.');
 
-  // 2) Prepare inserts
+  // 2) Prepare inserts (smart default assignee)
   const toInsert = tmpl.map(t => ({
     project_id: project.id,
     template_id: t.id,
     title: t.title,
     role: t.role,
-    assignee: t.role === 'Designer' ? (project.designer || null) : 'Admin',
+    assignee: computeDefaultAssignee(t.role, project),
     status: 'todo',
     due_date: null
   }));
@@ -189,7 +201,7 @@ async function seedFromTemplate(db, project) {
 
   const map = new Map(created.map(r => [r.template_id, r.id]));
 
-  // 4) Create real dependencies for offset templates
+  // 4) Create real dependencies for offset templates (if/when you add them)
   const deps = tmpl
     .filter(t => t.schedule_kind === 'offset' && t.anchor_template_id)
     .map(t => ({
