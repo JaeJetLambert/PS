@@ -4,6 +4,7 @@
 // - Multi-assign (assignees[]), compact checkbox dropdown
 // - Notes auto-grow + debounced autosave
 // - Cascading due dates from dependencies
+// - Deep-link support: project.html?id=...#task-<taskId>
 // ===============================
 const TASK_USERS = [
   'Sarah','Darby','Adaline','Designer','Admin','Katie','Jae','PM','Trey',
@@ -38,11 +39,15 @@ function computeDefaultAssignees(role, project) {
   const out = [];
   for (let p of parts) {
     p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
+    const low = p.toLowerCase();
     if (!p) continue;
-    if (p.toLowerCase().includes('designer')) {
+
+    if (low.includes('designer')) {
       out.push(project.designer || 'Designer');
-    } else if (/^admin$/i.test(p)) {
+    } else if (low === 'admin') {
       out.push('Admin');
+    } else if (low === 'project manager' || low === 'pm') {
+      out.push('PM');
     } else {
       out.push(p);
     }
@@ -95,16 +100,19 @@ async function initTasksUI(project) {
     }
   }
 
-  renderTasks(tasks);
-}
+  // Ensure stable order (fallback: in case DB ordering changes)
+  tasks = (tasks || []).slice().sort((a,b) => {
+    const pa = (a.position ?? 999999);
+    const pb = (b.position ?? 999999);
+    if (pa !== pb) return pa - pb;
+    return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+  });
 
-// ensure stable order in the UI
-tasks = (tasks || []).slice().sort((a,b) => {
-  const pa = (a.position ?? 999999);
-  const pb = (b.position ?? 999999);
-  if (pa !== pb) return pa - pb;
-  return String(a.created_at || '').localeCompare(String(b.created_at || ''));
-});
+  renderTasks(tasks);
+
+  // scroll to a specific task if URL has #task-<id>
+  maybeScrollToTaskFromHash();
+}
 
 function flash(msg) {
   const el = document.getElementById('tasksMsg');
@@ -124,6 +132,28 @@ async function loadTasks(db, projectId) {
   return data || [];
 }
 
+function maybeScrollToTaskFromHash() {
+  const id = (location.hash || '').slice(1); // e.g., "task-123"
+  if (!id) return;
+  const row = document.getElementById(id);
+  if (!row) return;
+
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  highlightRow(row);
+}
+
+function highlightRow(row) {
+  const original = row.style.backgroundColor;
+  row.style.backgroundColor = 'rgba(45,106,79,.12)'; // soft green tint
+  row.style.transition = 'background-color .6s ease';
+  setTimeout(() => { row.style.backgroundColor = original || ''; }, 1600);
+}
+
+// if user clicks another deep link while on the page
+window.addEventListener('hashchange', () => {
+  maybeScrollToTaskFromHash();
+});
+
 // --- Render --------------------------------------------------------
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
@@ -134,7 +164,7 @@ function renderTasks(tasks) {
     const label = selected.length ? selected.join(', ') : '— Select —';
 
     return `
-      <tr data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+      <tr id="task-${t.id}" data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
         <!-- Assignee -->
         <td class="assignee-cell" style="padding:.5rem .6rem;">
           <div class="assignee-box" data-action="assignee-toggle" style="display:flex; align-items:center; gap:.35rem; cursor:pointer;">
@@ -152,7 +182,7 @@ function renderTasks(tasks) {
             </div>
             <div class="assignee-actions" style="display:flex; gap:.5rem; justify-content:flex-end;">
               <button type="button" data-action="assignee-apply" class="save-btn" style="padding:.35rem .7rem;">Apply</button>
-              <button type="button" data-action="assignee-clear" class="btn" style="padding:.35rem .7rem;">Clear</button>
+              <button type="button" data-action="assignee-clear" class="btn" style="padding:.35rem .7rem; border:1px solid #d0d5dd; background:#fff; border-radius:6px; cursor:pointer;">Clear</button>
             </div>
           </div>
         </td>
@@ -283,11 +313,6 @@ function toggleAssigneeMenu(row) {
   menu.classList.remove('hidden');
   menu.style.display = 'block';
 
-  // Position relative to the assignee-box
-  const box = row.querySelector('.assignee-box');
-  const rect = box.getBoundingClientRect();
-  menu.style.position = 'absolute';
-  menu.style.marginTop = '.25rem';
   // ensure the cell is relatively positioned so menu anchors correctly
   row.querySelector('.assignee-cell').style.position = 'relative';
 
@@ -379,20 +404,20 @@ async function seedFromTemplate(db, project) {
 
   // 2) Prepare inserts (smart default assignees)
   const toInsert = tmpl.map(t => {
-  const people = computeDefaultAssignees(t.role, project);
-  return {
-    project_id: project.id,
-    template_id: t.id,
-    title: t.title,
-    role: t.role,
-    assignee: people[0] || null,   // keep legacy single-assignee in sync
-    assignees: people,             // multi-assign
-    status: 'todo',
-    due_date: null,
-    notes: null,
-    position: t.position           // <-- keep stable order forever
-  };
-});
+    const people = computeDefaultAssignees(t.role, project);
+    return {
+      project_id: project.id,
+      template_id: t.id,
+      title: t.title,
+      role: t.role,
+      assignee: people[0] || null,   // keep legacy single-assignee in sync
+      assignees: people,             // multi-assign
+      status: 'todo',
+      due_date: null,
+      notes: null,
+      position: t.position           // keep stable order forever
+    };
+  });
 
   // 3) Insert tasks and get ids back
   const { data: created, error: e1 } = await db

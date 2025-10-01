@@ -95,19 +95,18 @@ async function dbInsertProject(p) {
 }
 
 // Load "past due" tasks across ACTIVE projects: due_date < today AND status != 'done'.
-// Returns { totalCount, byAssignee: [{ assignee, projects: [...] }] }
+// Returns { totalCount, byAssignee: [{ assignee, entries: [{projectId, projectName, taskId}] }] }
 async function dbLoadPastDueSummary() {
-  // Active projects only
   const active = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
   if (!active.length) return { totalCount: 0, byAssignee: [] };
 
   const today = ymdLocal();
   const ids = active.map(p => p.id);
 
-  // Fetch tasks matching condition for those projects
+  // include task id + title for deep linking
   const { data, error } = await db
     .from('tasks')
-    .select('project_id, assignees, assignee, status, due_date')
+    .select('id, title, project_id, assignees, assignee, status, due_date')
     .in('project_id', ids)
     .lt('due_date', today)
     .neq('status', 'done');
@@ -115,37 +114,61 @@ async function dbLoadPastDueSummary() {
   if (error) throw error;
   if (!data?.length) return { totalCount: 0, byAssignee: [] };
 
-  // Map project_id -> project name (for display)
   const nameById = new Map(active.map(p => [p.id, p.name]));
 
-  // Build: assignee -> Set(projectName)
-  const map = new Map();
+  // Build: person -> (projectId -> "oldest past-due task" for that project)
+  const byPerson = new Map();
   for (const t of data) {
-    // expand multi-assign; fall back to scalar
-    let people = Array.isArray(t.assignees) && t.assignees.length
+    const people = (Array.isArray(t.assignees) && t.assignees.length
       ? t.assignees
-      : (t.assignee ? [t.assignee] : []);
-    people = people.map(normPerson).filter(Boolean);
+      : (t.assignee ? [t.assignee] : [])
+    ).map(normPerson).filter(Boolean);
 
-    const proj = nameById.get(t.project_id);
-    if (!proj) continue;
+    const projName = nameById.get(t.project_id);
+    if (!projName) continue;
 
-    // Each assignee gets the project name added (use a Set to de-dupe)
     for (const person of people) {
-      if (!map.has(person)) map.set(person, new Set());
-      map.get(person).add(proj);
+      if (!byPerson.has(person)) byPerson.set(person, new Map());
+      const perProj = byPerson.get(person);
+      const prev = perProj.get(t.project_id);
+      // keep the oldest due (smallest date) if multiple tasks in same project
+      if (!prev || (t.due_date && prev.due_date && t.due_date < prev.due_date)) {
+        perProj.set(t.project_id, {
+          projectId: t.project_id,
+          projectName: projName,
+          taskId: t.id,
+          due_date: t.due_date || null
+        });
+      }
     }
   }
 
-  // Shape for UI (A→Z assignees, and A→Z project lists)
-  const byAssignee = Array.from(map.entries())
-    .map(([assignee, set]) => ({
+  const byAssignee = Array.from(byPerson.entries())
+    .map(([assignee, projMap]) => ({
       assignee,
-      projects: Array.from(set).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}))
+      entries: Array.from(projMap.values())
+        .sort((a,b) => a.projectName.localeCompare(b.projectName, undefined, {sensitivity:'base'}))
     }))
     .sort((a,b) => a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
 
   return { totalCount: data.length, byAssignee };
+}
+
+function renderPastDueList(byAssignee) {
+  const ul = document.getElementById('pastDueByDesigner');
+  if (!ul) return;
+
+  if (!byAssignee.length) {
+    ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
+    return;
+  }
+
+  ul.innerHTML = byAssignee.map(({ assignee, entries }) => {
+    const links = entries
+      .map(e => `<a href="project.html?id=${encodeURIComponent(e.projectId)}#task-${encodeURIComponent(e.taskId)}">${e.projectName}</a>`)
+      .join(', ');
+    return `<li><span>${assignee}</span><span>${links}</span></li>`;
+  }).join('');
 }
 
 // --- Default assignee helpers -------------------------------------
@@ -286,10 +309,6 @@ function updateCounters() {
   );
   document.querySelector('#completedCounter h2').textContent = completedThisYear.length;
   renderMiniList('completedByDesigner', groupCountByDesigner(completedThisYear));
-
-  const pastDueList = []; // TODO
-  document.querySelector('#pastDueCounter h2').textContent = pastDueList.length;
-  renderMiniList('pastDueByDesigner', groupCountByDesigner(pastDueList));
 }
 
 async function refreshPastDueCounter() {
@@ -411,11 +430,12 @@ form.addEventListener('submit', async (e) => {
     }
 
     projects = await dbLoadProjects();
-    renderProjects();
-    updateCounters();
+renderProjects();
+updateCounters();
+await refreshPastDueCounter(); // <— add this line
 
-    modal.style.display = 'none';
-    form.reset();
+modal.style.display = 'none';
+form.reset();
   } catch (err) {
     alert('Could not save project: ' + err.message);
     console.error(err);
