@@ -36,8 +36,10 @@ function renderMiniList(ulId, items) {
   ul.innerHTML = items.map(it => `<li><span>${it.designer}</span><span>${it.count}</span></li>`).join('');
 }
 
-// small HTML-escape (for safe text in links)
-function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+// small HTML-escape (for safety)
+function esc(s){
+  return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
 
 // Local YYYY-MM-DD string (no timezone bugs)
 function ymdLocal(d = new Date()) {
@@ -52,8 +54,7 @@ function normPerson(s) {
   if (!s) return null;
   let p = String(s).trim().replace(/\.$/, '');    // "Admin." -> "Admin"
   const low = p.toLowerCase();
-  if (low === 'project manager') return 'PM';
-  if (low === 'pm') return 'PM';
+  if (low === 'project manager' || low === 'pm') return 'PM';
   if (low === 'admin') return 'Admin';
   return p;
 }
@@ -97,8 +98,9 @@ async function dbInsertProject(p) {
   return data;
 }
 
+// -------- Past Due summary (NO LINKS version) ----------------------
 // Load "past due" tasks across ACTIVE projects: due_date < today AND status != 'done'.
-// Returns { totalCount, byAssignee: [{ assignee, items: [{project_id, project_name, task_id}] }] }
+// Returns { totalCount, byAssignee: [{ assignee, projects: [projectName,…] }] }
 async function dbLoadPastDueSummary() {
   // 1) Only active projects
   const active = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
@@ -111,7 +113,7 @@ async function dbLoadPastDueSummary() {
   // 2) Pull overdue, not-done tasks for those projects
   const { data, error } = await db
     .from('tasks')
-    .select('id, project_id, assignees, assignee, status, due_date')
+    .select('project_id, assignees, assignee, status, due_date')
     .in('project_id', ids)
     .not('due_date', 'is', null)
     .lt('due_date', today)
@@ -120,50 +122,35 @@ async function dbLoadPastDueSummary() {
   if (error) throw error;
   if (!data?.length) return { totalCount: 0, byAssignee: [] };
 
-  // 3) Aggregate: assignee -> (project -> earliest overdue task)
-  const perPerson = new Map(); // person => Map(project_id => { task_id, due_date })
+  // 3) Build: assignee -> Set(projectName)
+  const map = new Map();
   for (const t of data) {
-    const projId = t.project_id;
-    const projName = nameById.get(projId);
-    if (!projName) continue;
-
-    // expand multi-assign; fall back to single assignee
+    // expand multi-assign; fall back to scalar
     let people = Array.isArray(t.assignees) && t.assignees.length
       ? t.assignees
       : (t.assignee ? [t.assignee] : []);
-    people = people
-      .map(s => (s || '').toString().trim().replace(/\.$/, ''))     // "Admin." -> "Admin"
-      .map(s => (s.toLowerCase() === 'project manager' || s.toLowerCase() === 'pm') ? 'PM' : s)
-      .filter(Boolean);
+    people = people.map(normPerson).filter(Boolean);
+
+    const proj = nameById.get(t.project_id);
+    if (!proj) continue;
 
     for (const person of people) {
-      if (!perPerson.has(person)) perPerson.set(person, new Map());
-      const m = perPerson.get(person);
-      const prev = m.get(projId);
-      if (!prev || (t.due_date || '') < (prev.due_date || '')) {
-        m.set(projId, { task_id: t.id, due_date: t.due_date, project_name: projName });
-      }
+      if (!map.has(person)) map.set(person, new Set());
+      map.get(person).add(proj);
     }
   }
 
-  // 4) Shape for UI (sort assignees A→Z; projects A→Z)
-  const byAssignee = Array.from(perPerson.entries())
-    .map(([assignee, projMap]) => {
-      const items = Array.from(projMap.entries())
-        .map(([project_id, info]) => ({
-          project_id,
-          project_name: info.project_name,
-          task_id: info.task_id
-        }))
-        .sort((a,b) => a.project_name.localeCompare(b.project_name, undefined, {sensitivity:'base'}));
-      return { assignee, items };
-    })
-    .sort((a,b) => a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
+  // 4) Shape for UI
+  const byAssignee = Array.from(map.entries())
+    .map(([assignee, set]) => ({
+      assignee,
+      projects: Array.from(set).sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}))
+    }))
+    .sort((a,b)=>a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
 
   return { totalCount: data.length, byAssignee };
 }
 
-// Render the Past Due list with clickable project links to the earliest overdue task
 function renderPastDueList(byAssignee) {
   const ul = document.getElementById('pastDueByDesigner');
   if (!ul) return;
@@ -173,15 +160,12 @@ function renderPastDueList(byAssignee) {
     return;
   }
 
-  ul.innerHTML = byAssignee.map(({ assignee, items }) => {
-    const links = items.map(it =>
-      `<a href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">${esc(it.project_name)}</a>`
-    ).join(', ');
-    return `<li><span>${esc(assignee)}</span><span>${links}</span></li>`;
+  ul.innerHTML = byAssignee.map(item => {
+    const projectsCsv = item.projects.join(', ');
+    return `<li><span>${esc(item.assignee)}</span><span>${esc(projectsCsv)}</span></li>`;
   }).join('');
 }
 
-// Pull + paint the count and list
 async function refreshPastDueCounter() {
   try {
     const { totalCount, byAssignee } = await dbLoadPastDueSummary();
@@ -197,8 +181,7 @@ async function refreshPastDueCounter() {
   }
 }
 
-// --- Default assignee helpers -------------------------------------
-// (legacy single value — not used in seeding anymore, kept for reference)
+// --- Default assignee helpers (used during seeding) ----------------
 function computeDefaultAssignee(role, projectRow) {
   if (!role) return null;
   if (role.toLowerCase().includes('designer')) return projectRow.designer || 'Designer';
@@ -208,20 +191,13 @@ function computeDefaultAssignee(role, projectRow) {
   return first;
 }
 
-// Choose default assignees from a template role string (supports multi)
-// - "Designer" -> project's designer name
-// - "Project Manager" or "PM" -> "PM"
-// - "Admin." -> "Admin"
-// - Split on commas or plus, trim, dedupe, keep order
 function computeDefaultAssignees(role, projectRow) {
   if (!role) return [];
   const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
-
   const out = [];
   for (let p of parts) {
-    p = p.replace(/\.$/, ''); // strip trailing period, e.g. "Admin." -> "Admin"
+    p = p.replace(/\.$/, '');
     const low = p.toLowerCase();
-
     if (low === 'designer') {
       out.push(projectRow.designer || 'Designer');
     } else if (low === 'project manager' || low === 'pm') {
@@ -229,26 +205,22 @@ function computeDefaultAssignees(role, projectRow) {
     } else if (low === 'admin') {
       out.push('Admin');
     } else {
-      // Keep names/others as written (Jae, Katie, Client, Darby, etc.)
       out.push(p);
     }
   }
-  // de-dupe while keeping order
   return Array.from(new Set(out.filter(Boolean)));
 }
 
 // --- AUTO-SEED tasks from template for a newly created project ----
 async function dbSeedTasksFromTemplate(projectRow) {
-  // 1) Load template rows in a stable order
   const { data: tmpl, error: e0 } = await db
     .from('task_templates')
     .select('*')
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (e0) throw e0;
-  if (!tmpl || !tmpl.length) return; // nothing to seed
+  if (!tmpl || !tmpl.length) return;
 
-  // 2) Prepare per-task inserts (smart default assignees)
   const toInsert = tmpl.map(t => {
     const people = computeDefaultAssignees(t.role, projectRow);
     return {
@@ -256,21 +228,19 @@ async function dbSeedTasksFromTemplate(projectRow) {
       template_id: t.id,
       title: t.title,
       role: t.role,
-      assignee: people[0] || null,  // keep legacy column in sync
-      assignees: people,            // NEW: array column
+      assignee: people[0] || null,
+      assignees: people,
       status: 'todo',
       due_date: null
     };
   });
 
-  // 3) Insert tasks and capture IDs
   const { data: created, error: e1 } = await db
     .from('tasks')
     .insert(toInsert)
     .select('id, template_id');
   if (e1) throw e1;
 
-  // 4) Convert template offsets → real dependencies
   const idByTemplate = new Map(created.map(r => [r.template_id, r.id]));
   const deps = tmpl
     .filter(t => t.schedule_kind === 'offset' && t.anchor_template_id)
@@ -290,6 +260,7 @@ async function dbSeedTasksFromTemplate(projectRow) {
 // --- Rendering -----------------------------------------------------
 function renderProjects() {
   const grid = document.getElementById("projectGrid");
+
   const activeList = projects
     .filter(p => p.status !== 'completed' && p.status !== 'abandoned')
     .sort(byName);
@@ -297,30 +268,25 @@ function renderProjects() {
   grid.innerHTML = activeList.map(p => `
     <div class="dashboard-card"
          onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
-      <h3>${p.name}</h3>
-      <p><strong>Designer:</strong> ${p.designer || ''}</p>
-      <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
+      <h3>${esc(p.name)}</h3>
+      <p><strong>Designer:</strong> ${esc(p.designer || '')}</p>
+      <p><strong>Start Date:</strong> ${esc(p.startDate || '')}</p>
     </div>
   `).join("");
 }
-
-function renderPastDueList(byAssignee) {}
-  const ul = document.getElementById('pastDueByDesigner'); // reuse existing <ul> in the card
-  if (!ul) return;
-
-  if (!byAssignee.length) {
-    ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
-    return;
-  }
 
 // --- Counters (+ per-designer lists) -------------------------------
 function updateCounters() {
   const year = new Date().getFullYear();
 
-  const activeList = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
+  // Active
+  const activeList = projects.filter(
+    p => p.status !== 'completed' && p.status !== 'abandoned'
+  );
   document.querySelector('#activeCounter h2').textContent = activeList.length;
   renderMiniList('activeByDesigner', groupCountByDesigner(activeList));
 
+  // Completed (This Year)
   const completedThisYear = projects.filter(p =>
     p.status === 'completed' &&
     p.completed_at &&
@@ -330,29 +296,14 @@ function updateCounters() {
   renderMiniList('completedByDesigner', groupCountByDesigner(completedThisYear));
 }
 
-async function refreshPastDueCounter() {
-  try {
-    const { totalCount, byAssignee } = await dbLoadPastDueSummary();
-    // Update number
-    const h2 = document.querySelector('#pastDueCounter h2');
-    if (h2) h2.textContent = totalCount;
-    // Update list
-    renderPastDueList(byAssignee);
-  } catch (e) {
-    console.error('Failed to load Past Due summary:', e);
-    const h2 = document.querySelector('#pastDueCounter h2');
-    if (h2) h2.textContent = '—';
-    const ul = document.getElementById('pastDueByDesigner');
-    if (ul) ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
-  }
-}
-
 // --- Search (active projects only) --------------------------------
 function setupSearch() {
   const input = document.getElementById('searchInput');
   input.addEventListener('input', () => {
     const term = (input.value || '').toLowerCase();
-    const activeList = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
+    const activeList = projects
+      .filter(p => p.status !== 'completed' && p.status !== 'abandoned');
+
     const list = (term
       ? activeList.filter(p => (p.name || '').toLowerCase().includes(term))
       : activeList
@@ -362,9 +313,9 @@ function setupSearch() {
     grid.innerHTML = list.map(p => `
       <div class="dashboard-card"
            onclick="window.location.href='project.html?id=${encodeURIComponent(p.id)}'">
-        <h3>${p.name}</h3>
-        <p><strong>Designer:</strong> ${p.designer || ''}</p>
-        <p><strong>Start Date:</strong> ${p.startDate || ''}</p>
+        <h3>${esc(p.name)}</h3>
+        <p><strong>Designer:</strong> ${esc(p.designer || '')}</p>
+        <p><strong>Start Date:</strong> ${esc(p.startDate || '')}</p>
       </div>
     `).join("");
   });
@@ -372,7 +323,7 @@ function setupSearch() {
 
 // --- Realtime ------------------------------------------------------
 function setupRealtime() {
-  // Projects channel (already present)
+  // Projects channel
   const projChan = db.channel('projects-live');
   projChan
     .on('postgres_changes',
@@ -382,7 +333,7 @@ function setupRealtime() {
           projects = await dbLoadProjects();
           renderProjects();
           updateCounters();
-          await refreshPastDueCounter();   // <<< refresh on project changes
+          await refreshPastDueCounter();
         } catch (e) {
           console.error('Realtime refresh (projects) failed:', e);
         }
@@ -390,14 +341,14 @@ function setupRealtime() {
     )
     .subscribe();
 
-  // NEW: Tasks channel for Past Due updates
+  // Tasks channel (Past Due only)
   const taskChan = db.channel('tasks-live');
   taskChan
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'tasks' },
       async () => {
         try {
-          await refreshPastDueCounter();   // only need to recompute Past Due
+          await refreshPastDueCounter();
         } catch (e) {
           console.error('Realtime refresh (tasks) failed:', e);
         }
@@ -441,6 +392,8 @@ form.addEventListener('submit', async (e) => {
 
   try {
     const created = await dbInsertProject(newProj);
+
+    // seed tasks immediately
     try {
       await dbSeedTasksFromTemplate(created);
     } catch (seedErr) {
@@ -449,12 +402,12 @@ form.addEventListener('submit', async (e) => {
     }
 
     projects = await dbLoadProjects();
-renderProjects();
-updateCounters();
-await refreshPastDueCounter(); // <— add this line
+    renderProjects();
+    updateCounters();
+    await refreshPastDueCounter();
 
-modal.style.display = 'none';
-form.reset();
+    modal.style.display = 'none';
+    form.reset();
   } catch (err) {
     alert('Could not save project: ' + err.message);
     console.error(err);
