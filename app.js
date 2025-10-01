@@ -163,7 +163,7 @@ async function dbLoadPastDueSummary() {
   return { totalCount: data.length, byAssignee };
 }
 
-// Render the Past Due list with clickable project links to the earliest overdue task
+// Render the Past Due list with clickable links to the earliest overdue task per project
 function renderPastDueList(byAssignee) {
   const ul = document.getElementById('pastDueByDesigner');
   if (!ul) return;
@@ -175,9 +175,13 @@ function renderPastDueList(byAssignee) {
 
   ul.innerHTML = byAssignee.map(({ assignee, items }) => {
     const links = items.map(it =>
-      `<a href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">${it.project_name}</a>`
+      `<a class="nav-link"
+          href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">
+         ${esc(it.project_name)}
+       </a>`
     ).join(', ');
-    return `<li><span>${assignee}</span><span>${links}</span></li>`;
+    // left = assignee, right = comma-separated project links
+    return `<li><span>${esc(assignee)}</span><span>${links}</span></li>`;
   }).join('');
 }
 
