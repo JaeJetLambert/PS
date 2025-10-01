@@ -98,9 +98,9 @@ async function dbInsertProject(p) {
   return data;
 }
 
-// -------- Past Due summary (NO LINKS version) ----------------------
+// -------- Past Due summary (LINKED version) ----------------------
 // Load "past due" tasks across ACTIVE projects: due_date < today AND status != 'done'.
-// Returns { totalCount, byAssignee: [{ assignee, projects: [projectName,…] }] }
+// Returns { totalCount, byAssignee: [{ assignee, items: [{project_id, project_name, task_id}] }] }
 async function dbLoadPastDueSummary() {
   // 1) Only active projects
   const active = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
@@ -113,7 +113,7 @@ async function dbLoadPastDueSummary() {
   // 2) Pull overdue, not-done tasks for those projects
   const { data, error } = await db
     .from('tasks')
-    .select('project_id, assignees, assignee, status, due_date')
+    .select('id, project_id, assignees, assignee, status, due_date')
     .in('project_id', ids)
     .not('due_date', 'is', null)
     .lt('due_date', today)
@@ -122,35 +122,51 @@ async function dbLoadPastDueSummary() {
   if (error) throw error;
   if (!data?.length) return { totalCount: 0, byAssignee: [] };
 
-  // 3) Build: assignee -> Set(projectName)
-  const map = new Map();
+  // 3) Aggregate: assignee -> (project -> earliest overdue task)
+  const perPerson = new Map(); // person => Map(project_id => { task_id, due_date, project_name })
   for (const t of data) {
-    // expand multi-assign; fall back to scalar
+    const projId = t.project_id;
+    const projName = nameById.get(projId);
+    if (!projName) continue;
+
+    // expand multi-assign; fall back to single assignee
     let people = Array.isArray(t.assignees) && t.assignees.length
       ? t.assignees
       : (t.assignee ? [t.assignee] : []);
-    people = people.map(normPerson).filter(Boolean);
-
-    const proj = nameById.get(t.project_id);
-    if (!proj) continue;
+    people = people
+      .map(s => (s || '').toString().trim().replace(/\.$/, '')) // "Admin." -> "Admin"
+      .map(s => (s.toLowerCase() === 'project manager' || s.toLowerCase() === 'pm') ? 'PM' : s)
+      .filter(Boolean);
 
     for (const person of people) {
-      if (!map.has(person)) map.set(person, new Set());
-      map.get(person).add(proj);
+      if (!perPerson.has(person)) perPerson.set(person, new Map());
+      const m = perPerson.get(person);
+      const prev = m.get(projId);
+      // keep the earliest overdue task (smallest YYYY-MM-DD string)
+      if (!prev || (t.due_date || '') < (prev.due_date || '')) {
+        m.set(projId, { task_id: t.id, due_date: t.due_date, project_name: projName });
+      }
     }
   }
 
-  // 4) Shape for UI
-  const byAssignee = Array.from(map.entries())
-    .map(([assignee, set]) => ({
-      assignee,
-      projects: Array.from(set).sort((a,b)=>a.localeCompare(b, undefined, {sensitivity:'base'}))
-    }))
-    .sort((a,b)=>a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
+  // 4) Shape for UI (assignees A→Z; projects A→Z)
+  const byAssignee = Array.from(perPerson.entries())
+    .map(([assignee, projMap]) => {
+      const items = Array.from(projMap.entries())
+        .map(([project_id, info]) => ({
+          project_id,
+          project_name: info.project_name,
+          task_id: info.task_id
+        }))
+        .sort((a,b) => a.project_name.localeCompare(b.project_name, undefined, {sensitivity:'base'}));
+      return { assignee, items };
+    })
+    .sort((a,b) => a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
 
   return { totalCount: data.length, byAssignee };
 }
 
+// Render the Past Due list with clickable project links to the earliest overdue task
 function renderPastDueList(byAssignee) {
   const ul = document.getElementById('pastDueByDesigner');
   if (!ul) return;
@@ -160,9 +176,11 @@ function renderPastDueList(byAssignee) {
     return;
   }
 
-  ul.innerHTML = byAssignee.map(item => {
-    const projectsCsv = item.projects.join(', ');
-    return `<li><span>${esc(item.assignee)}</span><span>${esc(projectsCsv)}</span></li>`;
+  ul.innerHTML = byAssignee.map(({ assignee, items }) => {
+    const links = items.map(it =>
+      `<a href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">${esc(it.project_name)}</a>`
+    ).join(', ');
+    return `<li><span>${esc(assignee)}</span><span>${links}</span></li>`;
   }).join('');
 }
 
