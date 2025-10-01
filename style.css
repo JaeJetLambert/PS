@@ -407,3 +407,5 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   border-color: #2d6a4f;
   box-shadow: 0 0 0 3px rgba(45,106,79,.15);
 }
+
+.mini-list li span:last-child { max-width: 60%; text-align: right; word-break: break-word; }

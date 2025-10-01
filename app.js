@@ -36,6 +36,9 @@ function renderMiniList(ulId, items) {
   ul.innerHTML = items.map(it => `<li><span>${it.designer}</span><span>${it.count}</span></li>`).join('');
 }
 
+// small HTML-escape (for safe text in links)
+function esc(s){return (s??'').toString().replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
 // Local YYYY-MM-DD string (no timezone bugs)
 function ymdLocal(d = new Date()) {
   const y = d.getFullYear();
@@ -94,19 +97,19 @@ async function dbInsertProject(p) {
   return data;
 }
 
-// Load "past due" tasks across ACTIVE projects: due_date < today AND status != 'done'.
-// Returns { totalCount, byAssignee: [{ assignee, entries: [{projectId, projectName, taskId}] }] }
+// Load "past due" tasks across ACTIVE projects and prepare deep links
 async function dbLoadPastDueSummary() {
+  // Active projects only
   const active = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
   if (!active.length) return { totalCount: 0, byAssignee: [] };
 
   const today = ymdLocal();
   const ids = active.map(p => p.id);
 
-  // include task id + title for deep linking
+  // Fetch tasks due before today and not done
   const { data, error } = await db
     .from('tasks')
-    .select('id, title, project_id, assignees, assignee, status, due_date')
+    .select('id, project_id, assignees, assignee, status, due_date')
     .in('project_id', ids)
     .lt('due_date', today)
     .neq('status', 'done');
@@ -114,42 +117,42 @@ async function dbLoadPastDueSummary() {
   if (error) throw error;
   if (!data?.length) return { totalCount: 0, byAssignee: [] };
 
+  // project_id -> project name
   const nameById = new Map(active.map(p => [p.id, p.name]));
 
-  // Build: person -> (projectId -> "oldest past-due task" for that project)
-  const byPerson = new Map();
-  for (const t of data) {
-    const people = (Array.isArray(t.assignees) && t.assignees.length
-      ? t.assignees
-      : (t.assignee ? [t.assignee] : [])
-    ).map(normPerson).filter(Boolean);
+  // assignee -> (project_id -> {project_id, project_name, task_id, due_date})
+  const bucket = new Map();
 
-    const projName = nameById.get(t.project_id);
-    if (!projName) continue;
+  for (const t of data) {
+    // expand multi-assign (fallback to single assignee)
+    let people = Array.isArray(t.assignees) && t.assignees.length
+      ? t.assignees
+      : (t.assignee ? [t.assignee] : []);
+    people = people.map(normPerson).filter(Boolean);
+
+    const pid = t.project_id;
+    const pname = nameById.get(pid);
+    if (!pname) continue;
 
     for (const person of people) {
-      if (!byPerson.has(person)) byPerson.set(person, new Map());
-      const perProj = byPerson.get(person);
-      const prev = perProj.get(t.project_id);
-      // keep the oldest due (smallest date) if multiple tasks in same project
+      if (!bucket.has(person)) bucket.set(person, new Map());
+      const perProj = bucket.get(person);
+      const prev = perProj.get(pid);
+
+      // If multiple overdue tasks in same project, keep the EARLIEST due one
       if (!prev || (t.due_date && prev.due_date && t.due_date < prev.due_date)) {
-        perProj.set(t.project_id, {
-          projectId: t.project_id,
-          projectName: projName,
-          taskId: t.id,
-          due_date: t.due_date || null
-        });
+        perProj.set(pid, { project_id: pid, project_name: pname, task_id: t.id, due_date: t.due_date || '' });
       }
     }
   }
 
-  const byAssignee = Array.from(byPerson.entries())
-    .map(([assignee, projMap]) => ({
+  const byAssignee = Array.from(bucket.entries())
+    .map(([assignee, perProj]) => ({
       assignee,
-      entries: Array.from(projMap.values())
-        .sort((a,b) => a.projectName.localeCompare(b.projectName, undefined, {sensitivity:'base'}))
+      items: Array.from(perProj.values())
+        .sort((a, b) => a.project_name.localeCompare(b.project_name, undefined, { sensitivity: 'base' }))
     }))
-    .sort((a,b) => a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
+    .sort((a, b) => a.assignee.localeCompare(b.assignee, undefined, { sensitivity: 'base' }));
 
   return { totalCount: data.length, byAssignee };
 }
@@ -163,11 +166,11 @@ function renderPastDueList(byAssignee) {
     return;
   }
 
-  ul.innerHTML = byAssignee.map(({ assignee, entries }) => {
-    const links = entries
-      .map(e => `<a href="project.html?id=${encodeURIComponent(e.projectId)}#task-${encodeURIComponent(e.taskId)}">${e.projectName}</a>`)
-      .join(', ');
-    return `<li><span>${assignee}</span><span>${links}</span></li>`;
+  ul.innerHTML = byAssignee.map(({ assignee, items }) => {
+    const links = items.map(it =>
+      `<a href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">${esc(it.project_name)}</a>`
+    ).join(', ');
+    return `<li><span>${esc(assignee)}</span><span>${links}</span></li>`;
   }).join('');
 }
 
