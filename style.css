@@ -409,3 +409,6 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
 }
 
 .mini-list li span:last-child { max-width: 60%; text-align: right; word-break: break-word; }
+
+.mini-list a { text-decoration: underline; }
+.mini-list a:hover { text-decoration: none; }
