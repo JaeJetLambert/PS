@@ -86,22 +86,32 @@ function computeDefaultAssignee(role, projectRow) {
   return first;
 }
 
-// Multi-assign version used in seeding
+// Choose default assignees from a template role string (supports multi)
+// - "Designer" -> project's designer name
+// - "Project Manager" or "PM" -> "PM"
+// - "Admin." -> "Admin"
+// - Split on commas or plus, trim, dedupe, keep order
 function computeDefaultAssignees(role, projectRow) {
   if (!role) return [];
   const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+
   const out = [];
   for (let p of parts) {
-    p = p.replace(/\.$/, '');
-    if (!p) continue;
-    if (p.toLowerCase().includes('designer')) {
+    p = p.replace(/\.$/, ''); // strip trailing period, e.g. "Admin." -> "Admin"
+    const low = p.toLowerCase();
+
+    if (low === 'designer') {
       out.push(projectRow.designer || 'Designer');
-    } else if (/^admin$/i.test(p)) {
+    } else if (low === 'project manager' || low === 'pm') {
+      out.push('PM');
+    } else if (low === 'admin') {
       out.push('Admin');
     } else {
+      // Keep names/others as written (Jae, Katie, Client, Darby, etc.)
       out.push(p);
     }
   }
+  // de-dupe while keeping order
   return Array.from(new Set(out.filter(Boolean)));
 }
 
