@@ -36,6 +36,25 @@ function renderMiniList(ulId, items) {
   ul.innerHTML = items.map(it => `<li><span>${it.designer}</span><span>${it.count}</span></li>`).join('');
 }
 
+// Local YYYY-MM-DD string (no timezone bugs)
+function ymdLocal(d = new Date()) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+// Normalize a person label for display/grouping
+function normPerson(s) {
+  if (!s) return null;
+  let p = String(s).trim().replace(/\.$/, '');    // "Admin." -> "Admin"
+  const low = p.toLowerCase();
+  if (low === 'project manager') return 'PM';
+  if (low === 'pm') return 'PM';
+  if (low === 'admin') return 'Admin';
+  return p;
+}
+
 // --- Data access ---------------------------------------------------
 async function dbLoadProjects() {
   const { data, error } = await db
@@ -73,6 +92,60 @@ async function dbInsertProject(p) {
     .single();
   if (error) throw error;
   return data;
+}
+
+// Load "past due" tasks across ACTIVE projects: due_date < today AND status != 'done'.
+// Returns { totalCount, byAssignee: [{ assignee, projects: [...] }] }
+async function dbLoadPastDueSummary() {
+  // Active projects only
+  const active = projects.filter(p => p.status !== 'completed' && p.status !== 'abandoned');
+  if (!active.length) return { totalCount: 0, byAssignee: [] };
+
+  const today = ymdLocal();
+  const ids = active.map(p => p.id);
+
+  // Fetch tasks matching condition for those projects
+  const { data, error } = await db
+    .from('tasks')
+    .select('project_id, assignees, assignee, status, due_date')
+    .in('project_id', ids)
+    .lt('due_date', today)
+    .neq('status', 'done');
+
+  if (error) throw error;
+  if (!data?.length) return { totalCount: 0, byAssignee: [] };
+
+  // Map project_id -> project name (for display)
+  const nameById = new Map(active.map(p => [p.id, p.name]));
+
+  // Build: assignee -> Set(projectName)
+  const map = new Map();
+  for (const t of data) {
+    // expand multi-assign; fall back to scalar
+    let people = Array.isArray(t.assignees) && t.assignees.length
+      ? t.assignees
+      : (t.assignee ? [t.assignee] : []);
+    people = people.map(normPerson).filter(Boolean);
+
+    const proj = nameById.get(t.project_id);
+    if (!proj) continue;
+
+    // Each assignee gets the project name added (use a Set to de-dupe)
+    for (const person of people) {
+      if (!map.has(person)) map.set(person, new Set());
+      map.get(person).add(proj);
+    }
+  }
+
+  // Shape for UI (A→Z assignees, and A→Z project lists)
+  const byAssignee = Array.from(map.entries())
+    .map(([assignee, set]) => ({
+      assignee,
+      projects: Array.from(set).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}))
+    }))
+    .sort((a,b) => a.assignee.localeCompare(b.assignee, undefined, {sensitivity:'base'}));
+
+  return { totalCount: data.length, byAssignee };
 }
 
 // --- Default assignee helpers -------------------------------------
@@ -182,6 +255,22 @@ function renderProjects() {
   `).join("");
 }
 
+function renderPastDueList(byAssignee) {
+  const ul = document.getElementById('pastDueByDesigner'); // reuse existing <ul> in the card
+  if (!ul) return;
+
+  if (!byAssignee.length) {
+    ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
+    return;
+  }
+
+  ul.innerHTML = byAssignee.map(item => {
+    const projectsCsv = item.projects.join(', ');
+    // left = assignee, right = comma-separated project names
+    return `<li><span>${item.assignee}</span><span>${projectsCsv}</span></li>`;
+  }).join('');
+}
+
 // --- Counters (+ per-designer lists) -------------------------------
 function updateCounters() {
   const year = new Date().getFullYear();
@@ -201,6 +290,23 @@ function updateCounters() {
   const pastDueList = []; // TODO
   document.querySelector('#pastDueCounter h2').textContent = pastDueList.length;
   renderMiniList('pastDueByDesigner', groupCountByDesigner(pastDueList));
+}
+
+async function refreshPastDueCounter() {
+  try {
+    const { totalCount, byAssignee } = await dbLoadPastDueSummary();
+    // Update number
+    const h2 = document.querySelector('#pastDueCounter h2');
+    if (h2) h2.textContent = totalCount;
+    // Update list
+    renderPastDueList(byAssignee);
+  } catch (e) {
+    console.error('Failed to load Past Due summary:', e);
+    const h2 = document.querySelector('#pastDueCounter h2');
+    if (h2) h2.textContent = '—';
+    const ul = document.getElementById('pastDueByDesigner');
+    if (ul) ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
+  }
 }
 
 // --- Search (active projects only) --------------------------------
@@ -228,8 +334,9 @@ function setupSearch() {
 
 // --- Realtime ------------------------------------------------------
 function setupRealtime() {
-  const channel = db.channel('projects-live');
-  channel
+  // Projects channel (already present)
+  const projChan = db.channel('projects-live');
+  projChan
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'projects' },
       async () => {
@@ -237,10 +344,27 @@ function setupRealtime() {
           projects = await dbLoadProjects();
           renderProjects();
           updateCounters();
+          await refreshPastDueCounter();   // <<< refresh on project changes
         } catch (e) {
-          console.error('Realtime refresh failed:', e);
+          console.error('Realtime refresh (projects) failed:', e);
         }
-      })
+      }
+    )
+    .subscribe();
+
+  // NEW: Tasks channel for Past Due updates
+  const taskChan = db.channel('tasks-live');
+  taskChan
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'tasks' },
+      async () => {
+        try {
+          await refreshPastDueCounter();   // only need to recompute Past Due
+        } catch (e) {
+          console.error('Realtime refresh (tasks) failed:', e);
+        }
+      }
+    )
     .subscribe();
 }
 
@@ -313,8 +437,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     projects = [];
   }
 
-  renderProjects();
-  updateCounters();
-  setupSearch();
-  setupRealtime();
+ renderProjects();          // alpha-sorted
+updateCounters();          // active + completed (year)
+await refreshPastDueCounter();  // <<< ADD THIS LINE
+setupSearch();
+setupRealtime();
 });
