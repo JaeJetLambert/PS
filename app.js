@@ -163,7 +163,7 @@ async function dbLoadPastDueSummary() {
   return { totalCount: data.length, byAssignee };
 }
 
-// Render the Past Due list with clickable links to the earliest overdue task per project
+// Render the Past Due list with clickable project links to the earliest overdue task
 function renderPastDueList(byAssignee) {
   const ul = document.getElementById('pastDueByDesigner');
   if (!ul) return;
@@ -175,12 +175,8 @@ function renderPastDueList(byAssignee) {
 
   ul.innerHTML = byAssignee.map(({ assignee, items }) => {
     const links = items.map(it =>
-      `<a class="nav-link"
-          href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">
-         ${esc(it.project_name)}
-       </a>`
+      `<a href="project.html?id=${encodeURIComponent(it.project_id)}#task-${encodeURIComponent(it.task_id)}">${esc(it.project_name)}</a>`
     ).join(', ');
-    // left = assignee, right = comma-separated project links
     return `<li><span>${esc(assignee)}</span><span>${links}</span></li>`;
   }).join('');
 }
@@ -308,7 +304,7 @@ function renderProjects() {
   `).join("");
 }
 
-function renderPastDueList(byAssignee) {
+function renderPastDueList(byAssignee) {}
   const ul = document.getElementById('pastDueByDesigner'); // reuse existing <ul> in the card
   if (!ul) return;
 
@@ -316,13 +312,6 @@ function renderPastDueList(byAssignee) {
     ul.innerHTML = `<li class="muted"><span>—</span><span>0</span></li>`;
     return;
   }
-
-  ul.innerHTML = byAssignee.map(item => {
-    const projectsCsv = item.projects.join(', ');
-    // left = assignee, right = comma-separated project names
-    return `<li><span>${item.assignee}</span><span>${projectsCsv}</span></li>`;
-  }).join('');
-}
 
 // --- Counters (+ per-designer lists) -------------------------------
 function updateCounters() {
@@ -473,23 +462,18 @@ form.reset();
 });
 
 // --- Bootstrap -----------------------------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   db = window.supabase;
-  if (!db) {
-    console.error('Supabase client not found on window.');
-    return;
-  }
+  if (!db) { console.error('Supabase client not found on window.'); return; }
 
-  try {
-    projects = await dbLoadProjects();
-  } catch (e) {
-    console.error('Failed to load from DB:', e);
-    projects = [];
-  }
-
- renderProjects();          // alpha-sorted
-updateCounters();          // active + completed (year)
-await refreshPastDueCounter();  // <<< ADD THIS LINE
-setupSearch();
-setupRealtime();
+  dbLoadProjects()
+    .then(rows => { projects = rows || []; })
+    .catch(e => { console.error('Failed to load from DB:', e); projects = []; })
+    .finally(() => {
+      renderProjects();
+      updateCounters();
+      refreshPastDueCounter(); // no await
+      setupSearch();
+      setupRealtime();
+    });
 });
