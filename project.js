@@ -290,3 +290,30 @@ reactivateBtn.addEventListener('click', async () => {
   // 👇 notify tasks.js that the project is ready
   document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
 })();
+
+(function(){
+  function sizeTasksScroll(){
+    const header = document.querySelector('.dashboard-header');
+    const topFixed = document.getElementById('projectTop');
+    const scroller = document.getElementById('tasksScroll');
+    if (!scroller) return;
+
+    const headerH = header ? header.offsetHeight : 0;
+
+    // Pin the "top" block directly under the sticky header
+    if (topFixed) topFixed.style.top = headerH + 'px';
+
+    // Compute how tall the top block is (after laying out its content)
+    const topH = topFixed ? topFixed.offsetHeight : 0;
+
+    // Fill the rest of the viewport with the task scroller
+    scroller.style.height = `calc(100vh - ${headerH + topH}px)`;
+  }
+
+  // Recompute on load, resize, and when tasks render
+  window.addEventListener('resize', sizeTasksScroll);
+  document.addEventListener('projectLoaded', () => {
+    // tasks.js will render the table; give it a tick, then measure
+    setTimeout(sizeTasksScroll, 0);
+  });
+})();

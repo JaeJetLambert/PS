@@ -8,40 +8,47 @@
 </head>
 <body class="dashboard-body">
 
-  <!-- Header with shared nav -->
+  <!-- Header with shared nav (now sticky via CSS) -->
   <header class="dashboard-header">
     <h1 id="projectTitle">Loading...</h1>
     <nav class="dashboard-nav">
       <a href="index.html">Dashboard</a>
       <a href="completed.html">Completed</a>
       <div class="designer-dropdown">
-  <button class="dropbtn">By Designer ▾</button>
-  <div class="dropdown-content">
-    <a href="designer.html?name=Sarah">Sarah</a>
-    <a href="designer.html?name=Darby">Darby</a>
-    <a href="designer.html?name=Adaline">Adaline</a>
-  </div>
-</div>
+        <button class="dropbtn">By Designer ▾</button>
+        <div class="dropdown-content">
+          <a href="designer.html?name=Sarah">Sarah</a>
+          <a href="designer.html?name=Darby">Darby</a>
+          <a href="designer.html?name=Adaline">Adaline</a>
+        </div>
+      </div>
     </nav>
   </header>
 
-  <!-- Back to previous screen -->
-<div style="padding:0 2rem 0.5rem;">
-  <button id="backBtn" class="save-btn" style="background:#555;">← Back</button>
-</div>
-
   <main class="project-details">
-    <!-- Project info panel (filled by project.js) -->
-    <section id="projectInfo" class="info-card"></section>
+    <!-- Everything ABOVE the task list stays pinned under the green bar -->
+    <div id="projectTop" class="project-top-fixed">
+      <!-- Back button -->
+      <div style="padding:0 0 0.5rem;">
+        <button id="backBtn" class="save-btn" style="background:#555;">← Back</button>
+      </div>
 
-    <!-- Placeholder for future per-project tasks -->
-    <section class="tasks-section">
-      <h2>Tasks</h2>
+      <!-- Project info panel (filled by project.js) -->
+      <section id="projectInfo" class="info-card"></section>
+
+      <!-- Tasks title (stays pinned with projectTop) -->
+      <section class="tasks-section">
+        <h2 style="margin:1rem 0 0;">Tasks</h2>
+      </section>
+    </div>
+
+    <!-- The ONLY scrolling area: task list -->
+    <div id="tasksScroll" class="tasks-scroll">
       <div id="taskList"></div>
-    </section>
+    </div>
 
-    <!-- Actions -->
-    <div class="actions">
+    <!-- Actions (below the scroller; page can scroll to these if needed) -->
+    <div class="actions" style="margin-top:1rem;">
       <button id="completeBtn">✅ Mark as Completed</button>
       <button id="abandonBtn">⚠️ Abandon Project</button>
       <button id="reactivateBtn" style="display:none;">🔄 Reactivate</button>
@@ -85,13 +92,9 @@
     );
   </script>
 
-<script src="nav.js" defer></script>
-
-<script src="ux.js" defer></script>
-
-<script src="tasks.js" defer></script>
-
-  <!-- Detail page logic -->
+  <script src="nav.js" defer></script>
+  <script src="ux.js" defer></script>
+  <script src="tasks.js" defer></script>
   <script src="project.js" defer></script>
 </body>
 </html>

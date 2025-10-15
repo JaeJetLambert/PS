@@ -412,3 +412,26 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
 
 .mini-list a { text-decoration: underline; }
 .mini-list a:hover { text-decoration: none; }
+
+/* Pin the green top bar */
+.dashboard-header{
+  position: sticky;
+  top: 0;
+  z-index: 1000; /* above page content */
+}
+
+/* Project page pinned header-underlay + task scroller */
+.project-top-fixed{
+  position: sticky;
+  /* top will be set dynamically to match the green header height */
+  z-index: 500;
+  background: var(--bg);
+  padding: 0 2rem 0; /* keep your page padding look */
+}
+
+/* The task list area that scrolls */
+.tasks-scroll{
+  overflow: auto;     /* this is what scrolls */
+  /* height set by JS to fill the viewport beneath header + top block */
+  padding: 0 2rem;
+}
