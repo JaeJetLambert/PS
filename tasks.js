@@ -68,7 +68,7 @@ async function initTasksUI(project) {
   const listEl = document.getElementById('taskList');
   listEl.innerHTML = `
     <div class="info-card" style="padding:0;">
-      <table id="tasksTable" style="width:100%; border-collapse:collapse; table-layout:fixed;">
+      <table id="tasksTable" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0;">
         <thead>
           <tr style="border-bottom:1px solid #e6e8ee;">
             <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>

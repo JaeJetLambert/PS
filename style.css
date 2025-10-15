@@ -429,6 +429,15 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   padding: 0 2rem 0; /* keep your page padding look */
 }
 
+/* Sticky task table header */
+#taskList thead th {
+  position: sticky;
+  top: 0;                /* stick to the top of the scrolling #taskList */
+  z-index: 5;            /* stay above rows */
+  background: var(--surface);
+  box-shadow: 0 1px 0 var(--border) inset; /* subtle divider */
+}
+
 /* The task list area that scrolls */
 .tasks-scroll{
   overflow: auto;     /* this is what scrolls */
