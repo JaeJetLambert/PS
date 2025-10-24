@@ -352,6 +352,7 @@ function setupRealtime() {
           renderProjects();
           updateCounters();
           await refreshPastDueCounter();
+          buildDesignerSelect();
         } catch (e) {
           console.error('Realtime refresh (projects) failed:', e);
         }
@@ -374,6 +375,66 @@ function setupRealtime() {
     )
     .subscribe();
 }
+
+// === Designer select: build + "Add new…" support ==================
+function uniqueDesignersFromProjects() {
+  const set = new Set(
+    (projects || [])
+      .map(p => (p.designer || '').trim())
+      .filter(Boolean)
+  );
+  return Array.from(set).sort((a,b) => a.localeCompare(b, undefined, {sensitivity:'base'}));
+}
+
+function buildDesignerSelect() {
+  const sel = document.getElementById('designerSelect');
+  if (!sel) return; // not on this page
+
+  const keepVal = sel.value; // remember current selection if any
+  const designers = uniqueDesignersFromProjects();
+
+  // Rebuild options
+  sel.innerHTML = '';
+  const ph = new Option('— Select designer —', '', true, false);
+  ph.disabled = true;
+  sel.add(ph);
+
+  designers.forEach(name => sel.add(new Option(name, name)));
+  sel.add(new Option('➕ Add new…', '__add_new__'));
+
+  // Try to restore prior selection
+  if (keepVal) {
+    const match = designers.find(d => d.toLowerCase() === keepVal.toLowerCase());
+    if (match) sel.value = match;
+  }
+}
+
+// Intercept the "Add new…" selection and prompt for a name
+document.addEventListener('change', (e) => {
+  const sel = e.target;
+  if (!(sel instanceof HTMLSelectElement)) return;
+  if (sel.id !== 'designerSelect') return;
+  if (sel.value !== '__add_new__') return;
+
+  const typed = (window.prompt('New designer name:') || '').trim();
+  if (!typed) {
+    // Rebuild to put the placeholder back and clear selection
+    buildDesignerSelect();
+    sel.value = '';
+    return;
+  }
+
+  // Avoid duplicates by label, case-insensitive
+  const exists = Array.from(sel.options).some(
+    o => o.value && o.value !== '__add_new__' && o.text.toLowerCase() === typed.toLowerCase()
+  );
+  if (!exists) {
+    // Insert before the "Add new…" option (last one)
+    const insertBefore = sel.options[sel.options.length - 1];
+    sel.add(new Option(typed, typed), insertBefore);
+  }
+  sel.value = typed; // select the new/existing entry
+});
 
 // --- New Project Modal --------------------------------------------
 const modal = document.getElementById("newProjectModal");
@@ -423,6 +484,7 @@ form.addEventListener('submit', async (e) => {
     renderProjects();
     updateCounters();
     await refreshPastDueCounter();
+    buildDesignerSelect();
 
     modal.style.display = 'none';
     form.reset();
@@ -444,7 +506,9 @@ document.addEventListener('DOMContentLoaded', () => {
       renderProjects();
       updateCounters();
       refreshPastDueCounter(); // no await
+      buildDesignerSelect();
       setupSearch();
       setupRealtime();
     });
 });
+
