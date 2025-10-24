@@ -154,6 +154,48 @@ window.addEventListener('hashchange', () => {
   maybeScrollToTaskFromHash();
 });
 
+// Local YYYY-MM-DD (avoid TZ surprises)
+function ymdLocal(d = new Date()){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+// Pick the "next due" task id from a project's task list
+function findNextDueTaskId(tasks){
+  if (!Array.isArray(tasks) || !tasks.length) return null;
+
+  const today = ymdLocal();
+
+  // Not done only
+  const open = tasks.filter(t => t.status !== 'done');
+
+  // 1) Due today or future: earliest date wins
+  const future = open.filter(t => t.due_date && t.due_date >= today)
+    .sort((a,b) => (a.due_date === b.due_date)
+      ? ( (a.position??9e9) - (b.position??9e9) )
+      : a.due_date.localeCompare(b.due_date)
+    );
+  if (future[0]) return future[0].id;
+
+  // 2) Overdue: the one closest to today (max due_date below today)
+  const overdue = open.filter(t => t.due_date && t.due_date < today)
+    .sort((a,b) => (a.due_date === b.due_date)
+      ? ( (a.position??9e9) - (b.position??9e9) )
+      : b.due_date.localeCompare(a.due_date)
+    );
+  if (overdue[0]) return overdue[0].id;
+
+  // 3) No due dates: first open by position/created_at
+  const byPos = open.slice().sort((a,b) => {
+    const pa = (a.position ?? 9e9), pb = (b.position ?? 9e9);
+    if (pa !== pb) return pa - pb;
+    return String(a.created_at||'').localeCompare(String(b.created_at||''));
+  });
+  return byPos[0]?.id ?? null;
+}
+
 // --- Render --------------------------------------------------------
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
@@ -291,6 +333,22 @@ function renderTasks(tasks) {
 
   // Close menus when clicking anywhere else
   document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
+}
+
+renderTasks(tasks);
+
+// If a deep link is present, honor it. Otherwise auto-jump to next due.
+if (location.hash && location.hash.startsWith('#task-')) {
+  maybeScrollToTaskFromHash();
+} else {
+  const nextId = findNextDueTaskId(tasks);
+  if (nextId) {
+    const row = document.getElementById(`task-${nextId}`);
+    if (row) {
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      highlightRow(row);
+    }
+  }
 }
 
 // --- Assignee menu helpers ----------------------------------------
