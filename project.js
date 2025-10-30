@@ -39,7 +39,6 @@ async function fetchProject() {
   if (!projId && !projName) return null;
 
   let q = db.from('projects').select('*').limit(1);
-
   if (projId) {
     q = q.eq('id', projId);
   } else {
@@ -67,14 +66,100 @@ async function fetchProject() {
   };
 }
 
+// ==== Missing-task backfill (ensures every project has all template tasks) ====
+
+function computeDefaultAssigneesForProject(role, projectRow) {
+  if (!role) return [];
+  const parts = String(role).split(/[,+]/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (let p of parts) {
+    p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
+    const low = p.toLowerCase();
+    if (low === 'designer') {
+      out.push(projectRow.designer || 'Designer');
+    } else if (low === 'project manager' || low === 'pm') {
+      out.push('PM');
+    } else if (low === 'admin') {
+      out.push('Admin');
+    } else {
+      out.push(p);
+    }
+  }
+  // de-dupe, preserve order
+  return Array.from(new Set(out.filter(Boolean)));
+}
+
+async function ensureMissingTemplateTasks(projectRow) {
+  const db = window.supabase;
+  if (!db || !projectRow?.id) return;
+
+  // 1) Load all templates (ordered)
+  const { data: tmpl, error: e0 } = await db
+    .from('task_templates')
+    .select('id, title, role, position, created_at')
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (e0) { console.error('Template load failed:', e0); return; }
+
+  // 2) Existing tasks for this project
+  const { data: existing, error: e1 } = await db
+    .from('tasks')
+    .select('id, template_id, title')
+    .eq('project_id', projectRow.id);
+  if (e1) { console.error('Existing tasks load failed:', e1); return; }
+
+  const haveByTemplate = new Set((existing || [])
+    .map(r => r.template_id)
+    .filter(Boolean));
+
+  const toInsert = [];
+  for (const t of (tmpl || [])) {
+    // If a row for this template id already exists, skip
+    if (t.id && haveByTemplate.has(t.id)) continue;
+
+    // Fallback: avoid duplicate by title if template_id linkage missing
+    const titleExists = (existing || []).some(x => (x.title || '').trim() === (t.title || '').trim());
+    if (titleExists) continue;
+
+    const people = computeDefaultAssigneesForProject(t.role, projectRow);
+    toInsert.push({
+      project_id: projectRow.id,
+      template_id: t.id,
+      title: t.title,
+      role: t.role,
+      assignee: people[0] || null, // legacy single field kept in sync
+      assignees: people,           // multi-assign
+      status: 'todo',
+      due_date: null,
+      notes: null,
+      position: t.position ?? null // keep your stable ordering
+    });
+  }
+
+  if (!toInsert.length) return;
+
+  // 3) Insert. If "position" is IDENTITY ALWAYS in your DB, retry without it.
+  const attempt = await db.from('tasks').insert(toInsert);
+  if (attempt.error) {
+    const msg = String(attempt.error.message || '');
+    if (/identity|generated always/i.test(msg)) {
+      const fallback = toInsert.map(({ position, ...rest }) => rest);
+      const retry = await db.from('tasks').insert(fallback);
+      if (retry.error) console.error('Insert retry without position failed:', retry.error);
+    } else {
+      console.error('Insert failed:', attempt.error);
+    }
+  }
+}
+
 // --- Rendering -----------------------------------------------------
 function renderInfo() {
   if (!project) {
     title.textContent = 'Project not found';
     info.textContent = '';
-    btnDone.disabled = true;
-    btnAbandon.disabled = true;
-    reactivateBtn.style.display = 'none';
+    if (btnDone) btnDone.disabled = true;
+    if (btnAbandon) btnAbandon.disabled = true;
+    if (reactivateBtn) reactivateBtn.style.display = 'none';
     return;
   }
 
@@ -104,16 +189,17 @@ function renderInfo() {
     ${abandonedBadge}
     ${notesBlocks}
   `;
-  // ^^^ FIXED: the template string properly closes with a backtick above
 
   const isCompleted = project.status === 'completed';
   const isAbandoned = project.status === 'abandoned';
 
-  btnDone.disabled = isCompleted || isAbandoned;
-  btnAbandon.disabled = isCompleted || isAbandoned;
+  if (btnDone) btnDone.disabled = isCompleted || isAbandoned;
+  if (btnAbandon) btnAbandon.disabled = isCompleted || isAbandoned;
 
-  reactivateBtn.style.display = isAbandoned ? 'inline-block' : 'none';
-  reactivateBtn.disabled = !isAbandoned;
+  if (reactivateBtn) {
+    reactivateBtn.style.display = isAbandoned ? 'inline-block' : 'none';
+    reactivateBtn.disabled = !isAbandoned;
+  }
 }
 
 // --- Complete modal helpers ---------------------------------------
@@ -129,10 +215,12 @@ function openCompleteModal() {
 }
 function closeComplete() { completeModal.style.display = 'none'; }
 
-closeCompleteModal.addEventListener('click', closeComplete);
-window.addEventListener('click', (e) => {
-  if (e.target === completeModal) closeComplete();
-});
+if (closeCompleteModal) {
+  closeCompleteModal.addEventListener('click', closeComplete);
+  window.addEventListener('click', (e) => {
+    if (e.target === completeModal) closeComplete();
+  });
+}
 
 // --- Abandon modal helpers ----------------------------------------
 function openAbandonModal() {
@@ -141,10 +229,12 @@ function openAbandonModal() {
 }
 function closeAbandon() { abandonModal.style.display = 'none'; }
 
-closeAbandonModal.addEventListener('click', closeAbandon);
-window.addEventListener('click', (e) => {
-  if (e.target === abandonModal) closeAbandon();
-});
+if (closeAbandonModal) {
+  closeAbandonModal.addEventListener('click', closeAbandon);
+  window.addEventListener('click', (e) => {
+    if (e.target === abandonModal) closeAbandon();
+  });
+}
 
 // --- Event wiring --------------------------------------------------
 
@@ -159,13 +249,13 @@ backBtn?.addEventListener('click', (e) => {
 });
 
 // Complete → open modal
-btnDone.addEventListener('click', () => {
+btnDone?.addEventListener('click', () => {
   if (!project) return;
   openCompleteModal();
 });
 
 // Complete modal → Done (save)
-completeConfirmBtn.addEventListener('click', async () => {
+completeConfirmBtn?.addEventListener('click', async () => {
   if (!project) return;
 
   // prevent double-submit
@@ -204,14 +294,14 @@ completeConfirmBtn.addEventListener('click', async () => {
 });
 
 // Abandon → open modal
-btnAbandon.addEventListener('click', () => {
+btnAbandon?.addEventListener('click', () => {
   if (!project) return;
   if (project.status === 'completed' || project.status === 'abandoned') return;
   openAbandonModal();
 });
 
 // Abandon modal → Done (save; notes required)
-abandonConfirmBtn.addEventListener('click', async () => {
+abandonConfirmBtn?.addEventListener('click', async () => {
   if (!project) return;
 
   const notes = abandonNotesInput.value.trim();
@@ -249,7 +339,7 @@ abandonConfirmBtn.addEventListener('click', async () => {
 });
 
 // Reactivate abandoned → back to active
-reactivateBtn.addEventListener('click', async () => {
+reactivateBtn?.addEventListener('click', async () => {
   if (!project || project.status !== 'abandoned') return;
 
   const ok = confirm('Reactivate this project back to Active?');
@@ -277,20 +367,7 @@ reactivateBtn.addEventListener('click', async () => {
   alert('Project reactivated.');
 });
 
-// --- Initial load --------------------------------------------------
-(async function init() {
-  try {
-    project = await fetchProject();
-  } catch (e) {
-    console.error(e);
-    project = null;
-  }
-    renderInfo();
-
-  // 👇 notify tasks.js that the project is ready
-  document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
-})();
-
+// --- Layout helper for pinned header + scrollable task list -------
 (function(){
   function sizeTasksScroll(){
     const header = document.querySelector('.dashboard-header');
@@ -310,10 +387,31 @@ reactivateBtn.addEventListener('click', async () => {
     scroller.style.height = `calc(100vh - ${headerH + topH}px)`;
   }
 
-  // Recompute on load, resize, and when tasks render
+  // Recompute on resize; tasks.js will also trigger after render
   window.addEventListener('resize', sizeTasksScroll);
   document.addEventListener('projectLoaded', () => {
-    // tasks.js will render the table; give it a tick, then measure
     setTimeout(sizeTasksScroll, 0);
   });
+})();
+
+// --- Initial load --------------------------------------------------
+(async function init(){
+  try {
+    project = await fetchProject();
+  } catch (e) {
+    console.error(e);
+    project = null;
+  }
+
+  renderInfo();
+
+  // Backfill any missing template tasks (e.g., “Initial Contact”)
+  try {
+    await ensureMissingTemplateTasks(project);
+  } catch (e) {
+    console.error('Backfill tasks failed:', e);
+  }
+
+  // Let tasks.js boot the task table UI with a complete set
+  document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
 })();
