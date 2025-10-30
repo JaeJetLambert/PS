@@ -51,6 +51,7 @@
     <div class="actions" style="margin-top:1rem;">
       <button id="completeBtn">✅ Mark as Completed</button>
       <button id="abandonBtn">⚠️ Abandon Project</button>
+      <button id="deleteBtn" class="danger-btn" title="Delete this project">🗑️ Delete Project</button>
       <button id="reactivateBtn" style="display:none;">🔄 Reactivate</button>
     </div>
   </main>
@@ -65,7 +66,7 @@
 
       <label style="display:block; margin-top:0.8rem;">
         Completed Date:
-        <input type="date" id="completionDateInput" />
+        <input type="date" id="completionDateInput" autocomplete="off" />
       </label>
 
       <button id="completeConfirmBtn" class="save-btn" style="margin-top:1rem;">Done</button>

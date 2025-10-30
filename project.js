@@ -18,6 +18,7 @@ const btnDone = document.getElementById('completeBtn');
 const btnAbandon = document.getElementById('abandonBtn');
 const reactivateBtn = document.getElementById('reactivateBtn');
 const backBtn = document.getElementById('backBtn');
+const deleteBtn = document.getElementById('deleteBtn');
 
 // Complete modal elements
 const completeModal = document.getElementById('completeModal');
@@ -204,12 +205,8 @@ function renderInfo() {
 
 // --- Complete modal helpers ---------------------------------------
 function openCompleteModal() {
-  // default date to today (YYYY-MM-DD)
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, '0');
-  const dd = String(today.getDate()).padStart(2, '0');
-  completionDateInput.value = `${yyyy}-${mm}-${dd}`;
+  // Leave blank unless the user sets it
+  completionDateInput.value = '';
   completionNotesInput.value = '';
   completeModal.style.display = 'block';
 }
@@ -393,6 +390,76 @@ reactivateBtn?.addEventListener('click', async () => {
     setTimeout(sizeTasksScroll, 0);
   });
 })();
+
+// Delete project (double-confirm by typing the exact name)
+deleteBtn?.addEventListener('click', async () => {
+  if (!project) return;
+
+  const ok = confirm('This will permanently delete the project, all tasks, and dependencies. Continue?');
+  if (!ok) return;
+
+  const typed = prompt(`Type the project name exactly to confirm deletion:\n\n${project.name}`);
+  if (!typed || typed.trim() !== (project.name || '').trim()) {
+    alert('Name did not match. Deletion canceled.');
+    return;
+  }
+
+  deleteBtn.disabled = true;
+  const prev = deleteBtn.textContent;
+  deleteBtn.textContent = 'Deleting…';
+
+  try {
+    await deleteProjectAndChildren(project.id);
+    alert('Project deleted.');
+    window.location.href = 'index.html';
+  } catch (err) {
+    console.error(err);
+    alert('Delete failed: ' + (err?.message || err));
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = prev;
+  }
+});
+
+// Permanently delete a project, its tasks, and related dependencies
+async function deleteProjectAndChildren(projectId) {
+  // 1) Find all task ids in this project
+  const { data: tasks, error: e0 } = await db
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId);
+  if (e0) throw e0;
+
+  const ids = (tasks || []).map(t => t.id);
+
+  // 2) Delete dependencies that reference those tasks (both sides)
+  if (ids.length) {
+    const { error: e1 } = await db
+      .from('task_dependencies')
+      .delete()
+      .in('task_id', ids);
+    if (e1) throw e1;
+
+    const { error: e2 } = await db
+      .from('task_dependencies')
+      .delete()
+      .in('anchor_task_id', ids);
+    if (e2) throw e2;
+
+    // 3) Delete all tasks in this project
+    const { error: e3 } = await db
+      .from('tasks')
+      .delete()
+      .eq('project_id', projectId);
+    if (e3) throw e3;
+  }
+
+  // 4) Delete the project itself
+  const { error: e4 } = await db
+    .from('projects')
+    .delete()
+    .eq('id', projectId);
+  if (e4) throw e4;
+}
 
 // --- Initial load --------------------------------------------------
 (async function init(){

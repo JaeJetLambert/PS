@@ -454,3 +454,16 @@ input[type="date"].date-empty::-webkit-calendar-picker-indicator { opacity: 1; }
 
 /* Firefox: make text transparent when empty */
 input[type="date"].date-empty { color: transparent; }
+
+/* Danger button */
+.danger-btn {
+  background: #b42318;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: .55rem .9rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.danger-btn:hover { background: #a11910; }
+.danger-btn:disabled { opacity: .6; cursor: not-allowed; }
