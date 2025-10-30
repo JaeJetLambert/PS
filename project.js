@@ -1,6 +1,7 @@
 // ===============================
-// project.js — Detail page logic (Complete + Abandon + Reactivate)
-// Now reads ?id=<uuid> first, falls back to ?name=<string>
+// project.js — Detail page logic (Complete + Abandon + Reactivate + Delete)
+// Prefers ?id=<uuid>, falls back to ?name=<string>
+// Dispatches "projectLoaded" once project is fetched
 // ===============================
 
 // Supabase client (created in project.html above this script)
@@ -18,7 +19,7 @@ const btnDone = document.getElementById('completeBtn');
 const btnAbandon = document.getElementById('abandonBtn');
 const reactivateBtn = document.getElementById('reactivateBtn');
 const backBtn = document.getElementById('backBtn');
-const deleteBtn = document.getElementById('deleteBtn');
+const deleteBtn = document.getElementById('deleteBtn'); // may not exist on all pages
 
 // Complete modal elements
 const completeModal = document.getElementById('completeModal');
@@ -43,7 +44,6 @@ async function fetchProject() {
   if (projId) {
     q = q.eq('id', projId);
   } else {
-    // Fallback to name; pick the most recently created if duplicates exist
     q = q.eq('name', projName).order('created_at', { ascending: false });
   }
 
@@ -68,7 +68,6 @@ async function fetchProject() {
 }
 
 // ==== Missing-task backfill (ensures every project has all template tasks) ====
-
 function computeDefaultAssigneesForProject(role, projectRow) {
   if (!role) return [];
   const parts = String(role).split(/[,+]/).map(s => s.trim()).filter(Boolean);
@@ -76,17 +75,11 @@ function computeDefaultAssigneesForProject(role, projectRow) {
   for (let p of parts) {
     p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
     const low = p.toLowerCase();
-    if (low === 'designer') {
-      out.push(projectRow.designer || 'Designer');
-    } else if (low === 'project manager' || low === 'pm') {
-      out.push('PM');
-    } else if (low === 'admin') {
-      out.push('Admin');
-    } else {
-      out.push(p);
-    }
+    if (low === 'designer') out.push(projectRow.designer || 'Designer');
+    else if (low === 'project manager' || low === 'pm') out.push('PM');
+    else if (low === 'admin') out.push('Admin');
+    else out.push(p);
   }
-  // de-dupe, preserve order
   return Array.from(new Set(out.filter(Boolean)));
 }
 
@@ -94,7 +87,7 @@ async function ensureMissingTemplateTasks(projectRow) {
   const db = window.supabase;
   if (!db || !projectRow?.id) return;
 
-  // 1) Load all templates (ordered)
+  // 1) Load templates (ordered)
   const { data: tmpl, error: e0 } = await db
     .from('task_templates')
     .select('id, title, role, position, created_at')
@@ -105,25 +98,18 @@ async function ensureMissingTemplateTasks(projectRow) {
   // 2) Existing tasks for this project
   const { data: existing, error: e1 } = await db
     .from('tasks')
-    .select('id, template_id, title')
+    .select('id, template_id')
     .eq('project_id', projectRow.id);
   if (e1) { console.error('Existing tasks load failed:', e1); return; }
 
-  const haveByTemplate = new Set((existing || [])
-    .map(r => r.template_id)
-    .filter(Boolean));
+  const have = new Set((existing || []).map(r => r.template_id).filter(Boolean));
+  const missing = (tmpl || []).filter(t => !have.has(t.id));
+  if (!missing.length) return;
 
-  const toInsert = [];
-  for (const t of (tmpl || [])) {
-    // If a row for this template id already exists, skip
-    if (t.id && haveByTemplate.has(t.id)) continue;
-
-    // Fallback: avoid duplicate by title if template_id linkage missing
-    const titleExists = (existing || []).some(x => (x.title || '').trim() === (t.title || '').trim());
-    if (titleExists) continue;
-
+  // 3) Prepare inserts
+  const toInsert = missing.map(t => {
     const people = computeDefaultAssigneesForProject(t.role, projectRow);
-    toInsert.push({
+    return {
       project_id: projectRow.id,
       template_id: t.id,
       title: t.title,
@@ -133,13 +119,11 @@ async function ensureMissingTemplateTasks(projectRow) {
       status: 'todo',
       due_date: null,
       notes: null,
-      position: t.position ?? null // keep your stable ordering
-    });
-  }
+      position: t.position ?? null
+    };
+  });
 
-  if (!toInsert.length) return;
-
-  // 3) Insert. If "position" is IDENTITY ALWAYS in your DB, retry without it.
+  // 4) Insert; if "position" is a generated column, retry without it
   const attempt = await db.from('tasks').insert(toInsert);
   if (attempt.error) {
     const msg = String(attempt.error.message || '');
@@ -193,10 +177,8 @@ function renderInfo() {
 
   const isCompleted = project.status === 'completed';
   const isAbandoned = project.status === 'abandoned';
-
   if (btnDone) btnDone.disabled = isCompleted || isAbandoned;
   if (btnAbandon) btnAbandon.disabled = isCompleted || isAbandoned;
-
   if (reactivateBtn) {
     reactivateBtn.style.display = isAbandoned ? 'inline-block' : 'none';
     reactivateBtn.disabled = !isAbandoned;
@@ -205,33 +187,33 @@ function renderInfo() {
 
 // --- Complete modal helpers ---------------------------------------
 function openCompleteModal() {
-  // Leave blank unless the user sets it
-  completionDateInput.value = '';
-  completionNotesInput.value = '';
-  completeModal.style.display = 'block';
+  // default date to today (YYYY-MM-DD)
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  if (completionDateInput) completionDateInput.value = `${yyyy}-${mm}-${dd}`;
+  if (completionNotesInput) completionNotesInput.value = '';
+  if (completeModal) completeModal.style.display = 'block';
 }
-function closeComplete() { completeModal.style.display = 'none'; }
+function closeComplete() { if (completeModal) completeModal.style.display = 'none'; }
 
-if (closeCompleteModal) {
-  closeCompleteModal.addEventListener('click', closeComplete);
-  window.addEventListener('click', (e) => {
-    if (e.target === completeModal) closeComplete();
-  });
-}
+if (closeCompleteModal) closeCompleteModal.addEventListener('click', closeComplete);
+window.addEventListener('click', (e) => {
+  if (e.target === completeModal) closeComplete();
+});
 
 // --- Abandon modal helpers ----------------------------------------
 function openAbandonModal() {
-  abandonNotesInput.value = '';
-  abandonModal.style.display = 'block';
+  if (abandonNotesInput) abandonNotesInput.value = '';
+  if (abandonModal) abandonModal.style.display = 'block';
 }
-function closeAbandon() { abandonModal.style.display = 'none'; }
+function closeAbandon() { if (abandonModal) abandonModal.style.display = 'none'; }
 
-if (closeAbandonModal) {
-  closeAbandonModal.addEventListener('click', closeAbandon);
-  window.addEventListener('click', (e) => {
-    if (e.target === abandonModal) closeAbandon();
-  });
-}
+if (closeAbandonModal) closeAbandonModal.addEventListener('click', closeAbandon);
+window.addEventListener('click', (e) => {
+  if (e.target === abandonModal) closeAbandon();
+});
 
 // --- Event wiring --------------------------------------------------
 
@@ -255,14 +237,12 @@ btnDone?.addEventListener('click', () => {
 completeConfirmBtn?.addEventListener('click', async () => {
   if (!project) return;
 
-  // prevent double-submit
   completeConfirmBtn.disabled = true;
   const oldLabel = completeConfirmBtn.textContent;
   completeConfirmBtn.textContent = 'Saving...';
 
-  // Collect form values
-  const notes = completionNotesInput.value.trim() || null;
-  const dateStr = completionDateInput.value; // 'YYYY-MM-DD' or ''
+  const notes = (completionNotesInput?.value || '').trim() || null;
+  const dateStr = completionDateInput?.value; // 'YYYY-MM-DD' or ''
   const chosenIso = dateStr
     ? new Date(`${dateStr}T00:00:00`).toISOString()
     : new Date().toISOString();
@@ -278,7 +258,6 @@ completeConfirmBtn?.addEventListener('click', async () => {
     return;
   }
 
-  // Update local state + UI
   project.status = 'completed';
   project.completed_at = chosenIso;
   project.completion_notes = notes;
@@ -297,17 +276,13 @@ btnAbandon?.addEventListener('click', () => {
   openAbandonModal();
 });
 
-// Abandon modal → Done (save; notes required)
+// Abandon modal → Done (notes required)
 abandonConfirmBtn?.addEventListener('click', async () => {
   if (!project) return;
 
-  const notes = abandonNotesInput.value.trim();
-  if (!notes) {
-    alert('Please enter who abandoned and why.');
-    return;
-  }
+  const notes = (abandonNotesInput?.value || '').trim();
+  if (!notes) { alert('Please enter who abandoned and why.'); return; }
 
-  // prevent double-submit
   abandonConfirmBtn.disabled = true;
   const old = abandonConfirmBtn.textContent;
   abandonConfirmBtn.textContent = 'Saving...';
@@ -364,39 +339,9 @@ reactivateBtn?.addEventListener('click', async () => {
   alert('Project reactivated.');
 });
 
-// --- Layout helper for pinned header + scrollable task list -------
-(function(){
-  function sizeTasksScroll(){
-    const header = document.querySelector('.dashboard-header');
-    const topFixed = document.getElementById('projectTop');
-    const scroller = document.getElementById('tasksScroll');
-    if (!scroller) return;
-
-    const headerH = header ? header.offsetHeight : 0;
-
-    // Pin the "top" block directly under the sticky header
-    if (topFixed) topFixed.style.top = headerH + 'px';
-
-    // Compute how tall the top block is (after laying out its content)
-    const topH = topFixed ? topFixed.offsetHeight : 0;
-
-    // Fill the rest of the viewport with the task scroller
-    scroller.style.height = `calc(100vh - ${headerH + topH}px)`;
-  }
-
-  // Recompute on resize; tasks.js will also trigger after render
-  window.addEventListener('resize', sizeTasksScroll);
-  document.addEventListener('projectLoaded', () => {
-    setTimeout(sizeTasksScroll, 0);
-  });
-})();
-
-// Grab the delete button
-const deleteBtn = document.getElementById('deleteBtn');
-
-// Hard-delete a project, its tasks, and related dependencies
+// --- Delete logic (simple confirm) --------------------------------
 async function hardDeleteProject(projectId) {
-  // 1) Collect task IDs for this project
+  // 1) tasks for this project
   const { data: tasks, error: e0 } = await db
     .from('tasks')
     .select('id')
@@ -405,28 +350,26 @@ async function hardDeleteProject(projectId) {
 
   const ids = (tasks || []).map(t => t.id);
 
-  // 2) Delete dependencies pointing to those tasks (both directions)
+  // 2) dependencies (both directions)
   if (ids.length) {
     const del1 = await db.from('task_dependencies').delete().in('task_id', ids);
-    if (del1.error && del1.error.code !== 'PGRST116') throw del1.error; // ignore "no rows" code
+    if (del1.error && del1.error.code !== 'PGRST116') throw del1.error;
 
     const del2 = await db.from('task_dependencies').delete().in('anchor_task_id', ids);
     if (del2.error && del2.error.code !== 'PGRST116') throw del2.error;
 
-    // 3) Delete the tasks
+    // 3) tasks
     const del3 = await db.from('tasks').delete().eq('project_id', projectId);
     if (del3.error) throw del3.error;
   }
 
-  // 4) Delete the project
+  // 4) project
   const del4 = await db.from('projects').delete().eq('id', projectId);
   if (del4.error) throw del4.error;
 }
 
-// Simple confirm (no typing the name)
 deleteBtn?.addEventListener('click', async () => {
   if (!project) return;
-
   const ok = confirm(`Delete "${project.name}" and all its tasks? This cannot be undone.`);
   if (!ok) return;
 
@@ -437,24 +380,20 @@ deleteBtn?.addEventListener('click', async () => {
   try {
     await hardDeleteProject(project.id);
 
-    // Sanity check: confirm the project is gone
-    const { data: stillThere, error: checkErr } = await db
+    // Verify gone
+    const { data: stillThere } = await db
       .from('projects')
       .select('id')
       .eq('id', project.id)
       .limit(1);
 
-    if (checkErr) console.warn('Post-delete check warning:', checkErr);
-
     if (stillThere && stillThere.length) {
-      // Usually indicates a DB policy issue preventing deletes
-      alert('Delete did not complete due to a database rule. If this keeps happening, we may need a Supabase policy to allow deletes.');
+      alert('Delete did not complete due to a database rule. Check Supabase RLS/policies for DELETE.');
       deleteBtn.disabled = false;
       deleteBtn.textContent = prev;
       return;
     }
 
-    // Go back to dashboard (which refetches projects)
     window.location.href = 'index.html';
   } catch (err) {
     console.error('Delete failed:', err);
@@ -465,23 +404,26 @@ deleteBtn?.addEventListener('click', async () => {
 });
 
 // --- Initial load --------------------------------------------------
-(async function init(){
+async function init() {
   try {
     project = await fetchProject();
   } catch (e) {
-    console.error(e);
+    console.error('Fetch failed:', e);
     project = null;
   }
 
   renderInfo();
 
-  // Backfill any missing template tasks (e.g., “Initial Contact”)
+  // Fill in any missing template tasks, then let tasks.js render
   try {
     await ensureMissingTemplateTasks(project);
   } catch (e) {
-    console.error('Backfill tasks failed:', e);
+    console.warn('ensureMissingTemplateTasks failed:', e);
   }
 
-  // Let tasks.js boot the task table UI with a complete set
+  // Signal to tasks.js that project is ready
   document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
-})();
+}
+
+// Run after DOM is ready
+document.addEventListener('DOMContentLoaded', init);
