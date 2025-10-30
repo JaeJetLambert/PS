@@ -6,7 +6,7 @@
 // - Cascading due dates from dependencies
 // - Deep-link support: project.html?id=...#task-<taskId>
 // - Auto-jump to next due task if no deep link
-// - Date inputs stay BLANK unless user-entered or auto-calculated
+// - Date inputs show BLANK UI when empty
 // ===============================
 const TASK_USERS = [
   'Sarah','Darby','Adaline','Designer','Admin','Katie','Jae','PM','Trey',
@@ -283,15 +283,20 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
       await updateTaskDue(target.id, newYMD);
       target.due_date = newYMD;
       const row = document.getElementById(`task-${target.id}`);
-      row?.querySelector('input[data-action="due"]')?.setAttribute('value', newYMD);
       const dueInput = row?.querySelector('input[data-action="due"]');
-      if (dueInput) dueInput.value = newYMD;
+      if (dueInput) {
+        dueInput.value = newYMD;
+        syncDateEmptyClass(dueInput);
+      }
     } else {
       await updateTaskStart(target.id, newYMD);
       target.start_date = newYMD;
       const row = document.getElementById(`task-${target.id}`);
       const startInput = row?.querySelector('input[data-action="start"]');
-      if (startInput) startInput.value = newYMD;
+      if (startInput) {
+        startInput.value = newYMD;
+        syncDateEmptyClass(startInput);
+      }
     }
   }
 }
@@ -358,10 +363,15 @@ function renderTasks(tasks) {
     `;
   }).join('');
 
-  // Force-clear any browser autofill ghosts
+  // Make empty date inputs visually BLANK (hide browser ghost text)
   body.querySelectorAll('input[type="date"]').forEach(el => {
-    if (!el.value) el.value = '';
+    el.value = el.value || '';
     el.setAttribute('autocomplete','off');
+    syncDateEmptyClass(el);
+    const sync = () => syncDateEmptyClass(el);
+    el.addEventListener('input', sync);
+    el.addEventListener('change', sync);
+    el.addEventListener('blur', sync);
   });
 
   // Wire row controls
@@ -456,6 +466,12 @@ function renderTasks(tasks) {
 
   // Close menus when clicking anywhere else
   document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
+}
+
+// Hide ghost text when date input is empty; show when it has a value
+function syncDateEmptyClass(el){
+  const isEmpty = !el.value || String(el.value).trim() === '';
+  el.classList.toggle('date-empty', isEmpty);
 }
 
 // --- Assignee menu helpers ----------------------------------------

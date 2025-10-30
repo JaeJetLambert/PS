@@ -444,3 +444,13 @@ input[type="text"]:focus, input[type="date"]:focus, select:focus, textarea:focus
   /* height set by JS to fill the viewport beneath header + top block */
   padding: 0 2rem;
 }
+
+/* Hide browser ghost text in empty <input type="date"> fields */
+input[type="date"].date-empty::-webkit-datetime-edit { color: transparent; }
+input[type="date"].date-empty::-webkit-clear-button { display: none; }
+input[type="date"].date-empty::-webkit-inner-spin-button { display: none; }
+/* Keep the calendar icon visible */
+input[type="date"].date-empty::-webkit-calendar-picker-indicator { opacity: 1; }
+
+/* Firefox: make text transparent when empty */
+input[type="date"].date-empty { color: transparent; }
