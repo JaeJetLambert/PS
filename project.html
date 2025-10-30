@@ -25,27 +25,31 @@
     </nav>
   </header>
 
-  <main class="project-details">
-    <!-- Everything ABOVE the task list stays pinned under the green bar -->
-    <div id="projectTop" class="project-top-fixed">
-      <!-- Back button -->
-      <div style="padding:0 0 0.5rem;">
-        <button id="backBtn" class="save-btn" style="background:#555;">← Back</button>
-      </div>
-
-      <!-- Project info panel (filled by project.js) -->
-      <section id="projectInfo" class="info-card"></section>
-
-      <!-- Tasks title (stays pinned with projectTop) -->
-      <section class="tasks-section">
-        <h2 style="margin:1rem 0 0;">Tasks</h2>
-      </section>
+  <main class="project-layout">
+  <!-- Everything above the tasks stays pinned -->
+  <div id="projectTop" class="project-top">
+    <!-- Back button -->
+    <div style="padding:0 2rem 0.5rem;">
+      <button id="backBtn" class="save-btn" style="background:#555;">← Back</button>
     </div>
 
-    <!-- The ONLY scrolling area: task list -->
-    <div id="tasksScroll" class="tasks-scroll">
-      <div id="taskList"></div>
+    <!-- Project info -->
+    <section id="projectInfo" class="info-card"></section>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button id="completeBtn">✅ Mark as Completed</button>
+      <button id="abandonBtn">⚠️ Abandon Project</button>
+      <button id="reactivateBtn" style="display:none;">🔄 Reactivate</button>
     </div>
+  </div>
+
+  <!-- Only this area scrolls -->
+  <section id="tasksScroll" class="tasks-scroll">
+    <h2>Tasks</h2>
+    <div id="taskList"></div>
+  </section>
+</main>
 
     <!-- Actions (below the scroller; page can scroll to these if needed) -->
     <div class="actions" style="margin-top:1rem;">

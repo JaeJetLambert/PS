@@ -467,3 +467,63 @@ input[type="date"].date-empty { color: transparent; }
 }
 .danger-btn:hover { background: #a11910; }
 .danger-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Layout skeleton: header + fixed top + scrolling tasks */
+body.dashboard-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Green bar across the top */
+.dashboard-header {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+/* Below the header, fill remaining height with project layout */
+.project-layout {
+  flex: 1 1 auto;
+  min-height: 0;            /* critical so the child scroller can size */
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* “Top” area (back button + info + actions) stays visible */
+.project-top {
+  flex: 0 0 auto;
+  /* No need for sticky here because the only scroller is below */
+  background: #fff;
+  box-shadow: 0 1px 0 #e6e8ee;
+  z-index: 900;
+}
+
+/* Only tasks scroll */
+.tasks-scroll {
+  flex: 1 1 auto;
+  min-height: 0;            /* critical so overflow works correctly */
+  overflow: auto;
+  background: #fff;
+  padding: 0 0 0.5rem 0;
+}
+
+/* Keep the table headers pinned inside the tasks scroller */
+.tasks-scroll .tasks-table thead th {
+  position: sticky;
+  top: 0;                   /* pinned to top of the scroller */
+  z-index: 2;
+  background: #fff;
+}
+
+/* Optional: keep the H2 visible while scrolling (remove if you prefer) */
+.tasks-scroll > h2 {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0;
+  padding: .5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e6e8ee;
+}
