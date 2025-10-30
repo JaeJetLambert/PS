@@ -208,6 +208,58 @@ window.addEventListener('hashchange', () => {
   maybeScrollToTaskFromHash();
 });
 
+// ---- Date helpers for dependency rules --------------------------------------
+function addDaysYMD(ymd, days){
+  // Parse as local date to avoid TZ drift
+  if (!ymd) return null;
+  const [y,m,d] = ymd.split('-').map(Number);
+  const dt = new Date(y, (m||1)-1, d||1);
+  dt.setDate(dt.getDate() + (days||0));
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  const dd = String(dt.getDate()).padStart(2,'0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+// Find a task by exact title in the same project
+async function findTaskByTitle(projectId, title){
+  const db = window.supabase;
+  const { data, error } = await db
+    .from('tasks')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('title', title)
+    .limit(1);
+  if (error) { console.error(error); return null; }
+  return data?.[0] || null;
+}
+
+// Apply our first rules after a start-date changes
+async function applyDateRulesAfterStartChange({ taskId, title, projectId, startDate }){
+  // Rule A: Nudge Process Document due = Nudge start + 14
+  if (title === 'Nudge Process Document' && startDate){
+    const due = addDaysYMD(startDate, 14);
+    await updateTaskDue(taskId, due);
+    // reflect in UI if this row exists
+    const row = document.getElementById(`task-${taskId}`);
+    row?.querySelector('[data-action="due"]')?.setAttribute('value', due);
+    row?.querySelector('[data-action="due"]')?.dispatchEvent(new Event('input', { bubbles:true }));
+  }
+
+  // Rule B: Send the Process Document start drives Nudge due = +14
+  if (title === 'Send the Process Document' && startDate){
+    const nudge = await findTaskByTitle(projectId, 'Nudge Process Document');
+    if (nudge?.id){
+      const due = addDaysYMD(startDate, 14);
+      await updateTaskDue(nudge.id, due);
+      // reflect in UI if visible
+      const nudgeRow = document.getElementById(`task-${nudge.id}`);
+      nudgeRow?.querySelector('[data-action="due"]')?.setAttribute('value', due);
+      nudgeRow?.querySelector('[data-action="due"]')?.dispatchEvent(new Event('input', { bubbles:true }));
+    }
+  }
+}
+
 // --- Render --------------------------------------------------------
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
@@ -301,11 +353,20 @@ function renderTasks(tasks) {
     });
 
     // Start / Due
-    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null;
-      await updateTaskStart(id, v);
-      flash('Start date updated.');
-    });
+row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+  const v = e.target.value || null;
+  await updateTaskStart(id, v);
+
+  // NEW: apply dependency rules
+  await applyDateRulesAfterStartChange({
+    taskId: id,
+    title: t.title,
+    projectId: t.project_id,
+    startDate: v
+  });
+
+  flash('Start date updated.');
+});
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
