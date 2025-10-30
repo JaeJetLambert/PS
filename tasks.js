@@ -493,8 +493,6 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
   // Special highlight check
   _updateReceiveFinalPaymentHighlight();
 }
-// ==================================================================
-// END DATE RULES ENGINE
 
 // --- Render --------------------------------------------------------
 function renderTasks(tasks) {
@@ -598,25 +596,24 @@ function renderTasks(tasks) {
       flash('Assignees cleared.');
     });
 
-    // Start / Due
     row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null;
-      await updateTaskStart(id, v);
+  const v = e.target.value || null;
+  await updateTaskStart(id, v);
 
-      // keep local cache in sync
-      const local = _currentTasks.find(x => String(x.id) === String(id));
-      if (local) {
-        local.start_date = v;
-        // fire date rules
-        await applyDateRulesAfterChange({
-          anchorTitle: (local.title || ''),
-          fieldChanged: 'start',
-          value: v
-        });
-      }
+  // keep local cache in sync
+  const local = _currentTasks.find(x => String(x.id) === String(id));
+  if (local) local.start_date = v;
 
-      flash('Start date updated.');
-    });
+  // fire rules & update UI immediately
+  await applyDateRulesAfterChange({
+    anchorTaskId: id,
+    anchorTitle: (local?.title ?? ''),
+    fieldChanged: 'start',
+    value: v
+  });
+
+  flash('Start date updated.');
+});
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
