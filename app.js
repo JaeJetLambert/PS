@@ -231,14 +231,16 @@ function computeDefaultAssignees(role, projectRow) {
 
 // --- AUTO-SEED tasks from template for a newly created project ----
 async function dbSeedTasksFromTemplate(projectRow) {
+  // 1) Load template rows in a stable order
   const { data: tmpl, error: e0 } = await db
     .from('task_templates')
     .select('*')
     .order('position', { ascending: true })
     .order('created_at', { ascending: true });
   if (e0) throw e0;
-  if (!tmpl || !tmpl.length) return;
+  if (!tmpl || !tmpl.length) return; // nothing to seed
 
+  // 2) Prepare per-task inserts (smart default assignees + keep position)
   const toInsert = tmpl.map(t => {
     const people = computeDefaultAssignees(t.role, projectRow);
     return {
@@ -246,19 +248,23 @@ async function dbSeedTasksFromTemplate(projectRow) {
       template_id: t.id,
       title: t.title,
       role: t.role,
-      assignee: people[0] || null,
-      assignees: people,
+      assignee: people[0] || null,  // keep legacy column in sync
+      assignees: people,            // array column
       status: 'todo',
-      due_date: null
+      due_date: null,
+      notes: null,
+      position: t.position ?? null  // <<< ensure stable order
     };
   });
 
+  // 3) Insert tasks and capture IDs
   const { data: created, error: e1 } = await db
     .from('tasks')
     .insert(toInsert)
     .select('id, template_id');
   if (e1) throw e1;
 
+  // 4) Convert template offsets → real dependencies
   const idByTemplate = new Map(created.map(r => [r.template_id, r.id]));
   const deps = tmpl
     .filter(t => t.schedule_kind === 'offset' && t.anchor_template_id)
