@@ -147,6 +147,9 @@ async function initTasksUI(project) {
     return String(a.created_at || '').localeCompare(String(b.created_at || ''));
   });
 
+    _currentProjectId = project.id;
+  _currentTasks = tasks.slice(); // keep a local snapshot for title lookups
+
   // Render table
   renderTasks(tasks);
 
@@ -260,6 +263,96 @@ async function applyDateRulesAfterStartChange({ taskId, title, projectId, startD
   }
 }
 
+// --- Date rules (auto-calculated due dates) -----------------------
+let _currentProjectId = null;
+let _currentTasks = []; // in-memory for title lookups
+
+// Rule set:
+// - When "Send the Process Document" START changes => set "Nudge Process Document" DUE = start + 14 (if Nudge due is blank)
+// - When "Nudge Process Document" START changes   => set its own DUE = start + 14 (always overwrite)
+const DATE_RULES = [
+  {
+    when:   { title: 'Send the Process Document', on: 'start' },
+    target: { title: 'Nudge Process Document', field: 'due' },
+    base:   'anchor.start',
+    offsetDays: 14,
+    onlyIfBlank: true,
+  },
+  {
+    when:   { title: 'Nudge Process Document', on: 'start' },
+    target: { title: 'Nudge Process Document', field: 'due' },
+    base:   'anchor.start',
+    offsetDays: 14,
+    onlyIfBlank: false,
+  }
+];
+
+// Normalize titles for matching
+function _normTitle(s){ return (s||'').trim().toLowerCase(); }
+
+// Find task (in-memory) by exact title (case-insensitive, trimmed)
+function _findTaskByTitleInMemory(title){
+  const needle = _normTitle(title);
+  return _currentTasks.find(t => _normTitle(t.title) === needle) || null;
+}
+
+// Utility: add days to YYYY-MM-DD
+function addDaysYMD(ymd, days){
+  const d = new Date(ymd+'T00:00:00');
+  d.setDate(d.getDate() + (days||0));
+  return d.toISOString().slice(0,10);
+}
+
+// Apply rules after a field change on a task
+async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
+  const db = window.supabase;
+  if (!db || !_currentProjectId) return;
+
+  // Evaluate rules triggered by this (title, field) change
+  const relevant = DATE_RULES.filter(r =>
+    _normTitle(r.when.title) === _normTitle(anchorTitle) &&
+    r.when.on === fieldChanged
+  );
+  if (!relevant.length) return;
+
+  for (const rule of relevant) {
+    const target = _findTaskByTitleInMemory(rule.target.title);
+    if (!target) continue; // can't find the target task in this project
+
+    // If only setting when blank, check current target value
+    if (rule.onlyIfBlank) {
+      const curr = rule.target.field === 'due' ? target.due_date : target.start_date;
+      if (curr) continue; // already set → skip
+    }
+
+    // Determine base date (for these rules it's always the anchor START)
+    const baseYMD = (rule.base === 'anchor.start') ? value : null;
+    if (!baseYMD) continue;
+
+    const newYMD = addDaysYMD(baseYMD, rule.offsetDays || 0);
+
+    // Persist to DB
+    if (rule.target.field === 'due') {
+      await updateTaskDue(target.id, newYMD);
+      target.due_date = newYMD; // keep local cache in sync
+      // Update UI cell if present
+      const row = document.getElementById(`task-${target.id}`);
+      if (row) {
+        const dueInput = row.querySelector('input[data-action="due"]');
+        if (dueInput) dueInput.value = newYMD;
+      }
+    } else {
+      await updateTaskStart(target.id, newYMD);
+      target.start_date = newYMD;
+      const row = document.getElementById(`task-${target.id}`);
+      if (row) {
+        const startInput = row.querySelector('input[data-action="start"]');
+        if (startInput) startInput.value = newYMD;
+      }
+    }
+  }
+}
+
 // --- Render --------------------------------------------------------
 function renderTasks(tasks) {
   const body = document.getElementById('tasksBody');
@@ -352,21 +445,36 @@ function renderTasks(tasks) {
       flash('Assignees cleared.');
     });
 
-    // Start / Due
-row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-  const v = e.target.value || null;
-  await updateTaskStart(id, v);
+     // Start / Due
+    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+      const v = e.target.value || null;
+      await updateTaskStart(id, v);
 
-  // NEW: apply dependency rules
-  await applyDateRulesAfterStartChange({
-    taskId: id,
-    title: t.title,
-    projectId: t.project_id,
-    startDate: v
-  });
+      // keep local cache in sync
+      const local = _currentTasks.find(x => String(x.id) === String(id));
+      if (local) local.start_date = v;
 
-  flash('Start date updated.');
-});
+      // fire date rules (e.g., Send Process Doc → Nudge due +14, or Nudge start → Nudge due +14)
+      await applyDateRulesAfterChange({
+        anchorTitle: (local?.title ?? ''),
+        fieldChanged: 'start',
+        value: v
+      });
+
+      flash('Start date updated.');
+    });
+
+    row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
+      const v = e.target.value || null;
+      await updateTaskDue(id, v);
+
+      // keep local cache in sync
+      const local = _currentTasks.find(x => String(x.id) === String(id));
+      if (local) local.due_date = v;
+
+      await cascadeDependents(id); // if this is an anchor, bump dependents
+      flash('Due date updated.');
+    });
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
