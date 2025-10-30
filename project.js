@@ -391,38 +391,12 @@ reactivateBtn?.addEventListener('click', async () => {
   });
 })();
 
-// Delete project (double-confirm by typing the exact name)
-deleteBtn?.addEventListener('click', async () => {
-  if (!project) return;
+// Grab the delete button
+const deleteBtn = document.getElementById('deleteBtn');
 
-  const ok = confirm('This will permanently delete the project, all tasks, and dependencies. Continue?');
-  if (!ok) return;
-
-  const typed = prompt(`Type the project name exactly to confirm deletion:\n\n${project.name}`);
-  if (!typed || typed.trim() !== (project.name || '').trim()) {
-    alert('Name did not match. Deletion canceled.');
-    return;
-  }
-
-  deleteBtn.disabled = true;
-  const prev = deleteBtn.textContent;
-  deleteBtn.textContent = 'Deleting…';
-
-  try {
-    await deleteProjectAndChildren(project.id);
-    alert('Project deleted.');
-    window.location.href = 'index.html';
-  } catch (err) {
-    console.error(err);
-    alert('Delete failed: ' + (err?.message || err));
-    deleteBtn.disabled = false;
-    deleteBtn.textContent = prev;
-  }
-});
-
-// Permanently delete a project, its tasks, and related dependencies
-async function deleteProjectAndChildren(projectId) {
-  // 1) Find all task ids in this project
+// Hard-delete a project, its tasks, and related dependencies
+async function hardDeleteProject(projectId) {
+  // 1) Collect task IDs for this project
   const { data: tasks, error: e0 } = await db
     .from('tasks')
     .select('id')
@@ -431,35 +405,64 @@ async function deleteProjectAndChildren(projectId) {
 
   const ids = (tasks || []).map(t => t.id);
 
-  // 2) Delete dependencies that reference those tasks (both sides)
+  // 2) Delete dependencies pointing to those tasks (both directions)
   if (ids.length) {
-    const { error: e1 } = await db
-      .from('task_dependencies')
-      .delete()
-      .in('task_id', ids);
-    if (e1) throw e1;
+    const del1 = await db.from('task_dependencies').delete().in('task_id', ids);
+    if (del1.error && del1.error.code !== 'PGRST116') throw del1.error; // ignore "no rows" code
 
-    const { error: e2 } = await db
-      .from('task_dependencies')
-      .delete()
-      .in('anchor_task_id', ids);
-    if (e2) throw e2;
+    const del2 = await db.from('task_dependencies').delete().in('anchor_task_id', ids);
+    if (del2.error && del2.error.code !== 'PGRST116') throw del2.error;
 
-    // 3) Delete all tasks in this project
-    const { error: e3 } = await db
-      .from('tasks')
-      .delete()
-      .eq('project_id', projectId);
-    if (e3) throw e3;
+    // 3) Delete the tasks
+    const del3 = await db.from('tasks').delete().eq('project_id', projectId);
+    if (del3.error) throw del3.error;
   }
 
-  // 4) Delete the project itself
-  const { error: e4 } = await db
-    .from('projects')
-    .delete()
-    .eq('id', projectId);
-  if (e4) throw e4;
+  // 4) Delete the project
+  const del4 = await db.from('projects').delete().eq('id', projectId);
+  if (del4.error) throw del4.error;
 }
+
+// Simple confirm (no typing the name)
+deleteBtn?.addEventListener('click', async () => {
+  if (!project) return;
+
+  const ok = confirm(`Delete "${project.name}" and all its tasks? This cannot be undone.`);
+  if (!ok) return;
+
+  deleteBtn.disabled = true;
+  const prev = deleteBtn.textContent;
+  deleteBtn.textContent = 'Deleting…';
+
+  try {
+    await hardDeleteProject(project.id);
+
+    // Sanity check: confirm the project is gone
+    const { data: stillThere, error: checkErr } = await db
+      .from('projects')
+      .select('id')
+      .eq('id', project.id)
+      .limit(1);
+
+    if (checkErr) console.warn('Post-delete check warning:', checkErr);
+
+    if (stillThere && stillThere.length) {
+      // Usually indicates a DB policy issue preventing deletes
+      alert('Delete did not complete due to a database rule. If this keeps happening, we may need a Supabase policy to allow deletes.');
+      deleteBtn.disabled = false;
+      deleteBtn.textContent = prev;
+      return;
+    }
+
+    // Go back to dashboard (which refetches projects)
+    window.location.href = 'index.html';
+  } catch (err) {
+    console.error('Delete failed:', err);
+    alert('Delete failed: ' + (err?.message || err));
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = prev;
+  }
+});
 
 // --- Initial load --------------------------------------------------
 (async function init(){
