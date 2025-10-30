@@ -271,13 +271,26 @@ function _findTaskByTitleOcc(title, occ=1){
   return matches[(occ||1)-1] || null;
 }
 
-// Some friendly aliases (handles tiny wording drift). Add as needed.
+// --- Title aliases (normalize minor wording changes) ---
 const TITLE_ALIAS = new Map([
-  ['send initial presentation', 'Send Initial Presentation to Client'],
-  ['send initial presentation to client', 'Send Initial Presentation to Client'],
-  ['folder on sarah’s desk', "Folder on Sarah's Desk"],
-  ['clipboard on katie’s desk', "Clipboard on Katie's Desk"]
+  // IP wording
+  ['send initial presentation', 'Send Initial Presentation'],
+  ['send initial presentation to client', 'Send Initial Presentation'],
+
+  // Smart quotes → straight
+  ["folder on sarah’s desk", "Folder on Sarah's Desk"],
+  ["clipboard on katie’s desk", "Clipboard on Katie's Desk"],
+
+  // Agreement wording changes
+  ['send contract', 'Send Design Agreement'],
+  ['weekly double tap - send contract', 'Weekly Double Tap - Send Design Agreement'],
+
+  // Extra normalizations if typed with lower/extra spaces
+  ['weekly double tap -  ip to client', 'Weekly Double Tap - Send IP to Client'],
+  ['weekly double tap - send ip to client', 'Weekly Double Tap - Send IP to Client'],
+  ['sign design agreement', 'Sign Design Agreement']
 ]);
+
 function _resolveTitle(t){
   const key = _normTitle(t);
   for (const [k,v] of TITLE_ALIAS.entries()){
@@ -286,47 +299,51 @@ function _resolveTitle(t){
   return t; // as given
 }
 
-// RULE SCHEMA:
-// when:   { title, on: 'start' | 'due' }
+// RULE SCHEMA (unchanged):
+// when:   { title, on: 'start'|'due' }
 // target: { title, field: 'start'|'due', occurrence?: number }
 // base:   'anchor.start' | 'anchor.due'
 // Either offsetDays (integer) OR calc: 'prevFriday'|'nextFriday'|'secondFriday'
 // onlyIfBlank?: boolean (default false)
+
 const DATE_RULES = [
-  // --- Have Initial Consultation anchors ---
+  // ===== Have Initial Consultation anchors =====
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Confirm Initial Consultation', field:'due'}, base:'anchor.start', offsetDays:-5 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Prepare Client Dossier', field:'due'}, base:'anchor.start', offsetDays:-5 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk", field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Contract', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+1 },
 
-  // --- Process Doc / Nudge pair ---
-  { when:{title:'Send the Process Document', on:'start'}, target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Nudge Process Document', on:'start'},         target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14 },
+  // ===== Design Agreement chain =====
+  // Send Design Agreement → WDT (only if blank)
+  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Send Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  // WDT (own start controls own due)
+  { when:{title:'Weekly Double Tap - Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Send Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
 
-  // --- Sign Contract anchors many things ---
+  // ===== Signing the Design Agreement (if present) fans out scheduling/photos =====
+  { when:{title:'Sign Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Sign Design Agreement', on:'start'}, target:{title:'Make Google Drive Folder', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Sign Design Agreement', on:'start'}, target:{title:'Create Client Accounts in Both XERO Accounts', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Sign Design Agreement', on:'start'}, target:{title:'Execute Pictures and Measure', field:'due'}, base:'anchor.start', offsetDays:+7 },
+
+  // (If your flow uses Sign Contract here instead of Sign Design Agreement, keep both)
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Pictures and Measure', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Make Google Drive Folder', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Create Client Accounts in Both XERO Accounts', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Execute Pictures and Measure', field:'due'}, base:'anchor.start', offsetDays:+7 },
 
-  // Receive Deposit tied to Execute Pictures and Measure
+  // ===== Photos/measure branch =====
   { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Receive Deposit', field:'due'}, base:'anchor.start', offsetDays:0 },
-
-  // Post-Exec quick follow-ups
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send Review Email to Client', field:'due', occurrence:1}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send Review Email to Client 1', field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:"Folder on Sarah's Desk", field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Upload Pics to Google Photos', field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Share Pics With Everyone on the Project', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:_resolveTitle('Send Initial Presentation to Client'), field:'due'}, base:'anchor.start', offsetDays:+14 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:_resolveTitle('Send Initial Presentation'), field:'due'}, base:'anchor.start', offsetDays:+14 },
 
-  // Weekly Double Tap for IP
-  { when:{title:_resolveTitle('Send Initial Presentation to Client'), on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  // ===== IP → weekly double tap =====
+  { when:{title:_resolveTitle('Send Initial Presentation'), on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
   { when:{title:'Weekly Double Tap - Send IP to Client', on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14 },
 
-  // Client Sends Review → Specific Presentation Scheduling
+  // ===== Client review → specific presentation =====
   { when:{title:'Client Sends Review', on:'start'}, target:{title:'Schedule Specific Presentation', field:'due'}, base:'anchor.start', offsetDays:+21 },
 
-  // Specific Presentation Meeting downstream
+  // ===== Specific Presentation Meeting downstream =====
   { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Spreadsheet', field:'due'}, base:'anchor.start', offsetDays:-3 },
   { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Price Spreadsheet', field:'due'}, base:'anchor.start', offsetDays:0 },
   { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Sub Packet for Quick Price', field:'due'}, base:'anchor.start', offsetDays:-3 },
@@ -336,23 +353,23 @@ const DATE_RULES = [
   { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Schedule Sub Meeting', field:'due'}, base:'anchor.start', offsetDays:+7 },
   { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Sub Meeting', field:'due'}, base:'anchor.start', offsetDays:+14 },
 
-  // After Sub Meeting
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Review Email to Client', field:'due', occurrence:2}, base:'anchor.start', offsetDays:+1 },
+  // ===== After Sub Meeting =====
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Review Email to Client 2', field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Updates to Katie + Designer', field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Sub Meeting', on:'start'}, target:{title:'Update Sub Notes and Drawings Based on Feedback', field:'due'}, base:'anchor.start', offsetDays:+7 },
   { when:{title:'Sub Meeting', on:'start'}, target:{title:'Price Construction Job', field:'due'}, base:'anchor.start', offsetDays:+28 },
   { when:{title:'Sub Meeting', on:'start'}, target:{title:'Schedule Final Pricing + Specifics Meeting', field:'due'}, base:'anchor.start', offsetDays:+28 },
   { when:{title:'Sub Meeting', on:'start'}, target:{title:'Final Pricing + Specifics Meeting', field:'due'}, base:'anchor.start', offsetDays:+28 },
 
-  // Final Pricing + Specifics Meeting fan-out
+  // ===== Final Pricing + Specifics Meeting fan-out =====
   { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final pricing printout emailed or in client drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
   { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final Pricing Printouts, Calendar and Contract Ready in Client Drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Send Review Email to Client', field:'due', occurrence:3}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Send Review Email to Client 3', field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Designer Edits', field:'due'}, base:'anchor.start', offsetDays:+3 },
   { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Pricer Edits', field:'due'}, base:'anchor.start', offsetDays:+3 },
   { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Sign Contract', field:'due'}, base:'anchor.start', offsetDays:+7 },
 
-  // Sign Contract more fan-out (+7 after)
+  // ===== Post Sign Contract (unchanged) =====
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Receive Payment from Clients', field:'due'}, base:'anchor.start', offsetDays:0 },
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Hit Approve Invoice', field:'due'}, base:'anchor.start', offsetDays:0 },
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Drapery Final Measure', field:'due'}, base:'anchor.start', offsetDays:+7 },
@@ -372,7 +389,7 @@ const DATE_RULES = [
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Add to Payment Calendar', field:'due'}, base:'anchor.start', offsetDays:+7 },
   { when:{title:'Sign Contract', on:'start'}, target:{title:'Cadenced Follow Up to Designer and client', field:'due'}, base:'anchor.start', offsetDays:+7 },
 
-  // Construction timeline anchors
+  // ===== Construction timeline anchors =====
   { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer meet with DJ', field:'due'}, base:'anchor.start', offsetDays:-14 },
   { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer do PSG sign offs', field:'due'}, base:'anchor.start', offsetDays:-14 },
   { when:{title:'Add all docs to google drive', on:'start'}, target:{title:'Update construction start and completion date on lines', field:'due'}, base:'anchor.start', offsetDays:0 },
@@ -382,14 +399,15 @@ const DATE_RULES = [
   { when:{title:'Construction Job Starts', on:'start'}, target:{title:'PMs Bring Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
   { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Create Invoices and bills to Reflect Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
 
-  // Designer Visits Job: 14d after FFW, then snaps to every 2nd Friday when its own start changes
+  // Designer Visits Job cadence
   { when:{title:'Final Friday Walkthrough', on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', offsetDays:+14 },
   { when:{title:'Designer Visits Job', on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', calc:'secondFriday' },
 
+  // Payments sequenced
   { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Receive Payment 2', field:'due'}, base:'anchor.start', offsetDays:+28 },
   { when:{title:'Receive Payment 2', on:'start'},         target:{title:'Receive Payment 3', field:'due'}, base:'anchor.start', offsetDays:+28 },
 
-  // Completion anchors
+  // ===== Completion anchors =====
   { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:1}, base:'anchor.start', offsetDays:-28 },
   { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:2}, base:'anchor.start', offsetDays:-14 },
   { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Install', field:'due'}, base:'anchor.start', offsetDays:-14 },
@@ -401,7 +419,7 @@ const DATE_RULES = [
   { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Completion walk', field:'due'}, base:'anchor.start', offsetDays:0 },
   { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Designer Celebration walk', field:'due'}, base:'anchor.start', offsetDays:+7 },
 
-  // Install chain
+  // ===== Install chain =====
   { when:{title:'Install + Style', on:'start'}, target:{title:'Email Accessories Allowance to Designer', field:'due'}, base:'anchor.start', offsetDays:-1 },
   { when:{title:'Install + Style', on:'start'}, target:{title:'Prep Accessories for Install', field:'due'}, base:'anchor.start', offsetDays:-1 },
   { when:{title:'Install + Style', on:'start'}, target:{title:'Prepare/load for install', field:'due'}, base:'anchor.start', offsetDays:-1 },
