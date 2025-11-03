@@ -1,5 +1,6 @@
 const BUILD_TAG = 'v20251103h';
-console.log(`project.js ${BUILD_TAG} loaded at`, new Date().toISOString());
+console.log('[project.js] dispatching projectLoaded for', project?.id);
+document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
 // ===============================
 // project.js — Detail page logic (Complete + Abandon + Reactivate + Delete)
 // Prefers ?id=<uuid>, falls back to ?name=<string>

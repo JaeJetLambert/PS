@@ -582,12 +582,18 @@ try {
 
 function flash(msg){ const el=document.getElementById('tasksMsg'); if(!el) return; el.textContent=msg||''; if(msg) setTimeout(()=> (el.textContent=''), 2500); }
 async function loadTasks(db, projectId){
-  const { data, error } = await db.from('tasks')
-    .select('*, task_dependencies:task_dependencies!task_dependencies_task_id_fkey (anchor_task_id, offset_days)')
+  const { data, error } = await db
+    .from('tasks')
+    .select('id, title, status, assignees, assignee, start_date, due_date, notes, position, created_at')
     .eq('project_id', projectId)
     .order('position', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
-  if (error) throw error;
+
+  if (error) {
+    console.error('loadTasks error:', error);
+    flash('Could not load tasks (see console).');
+    return [];
+  }
   return data || [];
 }
 function maybeScrollToTaskFromHash(){
