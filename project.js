@@ -1,4 +1,4 @@
-const BUILD_TAG = 'v20251103g';
+const BUILD_TAG = 'v20251103h';
 console.log(`project.js ${BUILD_TAG} loaded at`, new Date().toISOString());
 // ===============================
 // project.js — Detail page logic (Complete + Abandon + Reactivate + Delete)

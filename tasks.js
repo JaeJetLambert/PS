@@ -1,5 +1,8 @@
-const BUILD_TAG = 'v20251103g'; // <-- bump when you change ?v=... in project.html
+const BUILD_TAG = 'v20251103h'; // <-- bump when you change ?v=... in project.html
 console.log(`tasks.js ${BUILD_TAG} loaded at`, new Date().toISOString());
+window.addEventListener('error', e => {
+  console.error('[tasks.js global error]', e.message, e.filename, e.lineno, e.colno);
+});
 // ===============================
 // tasks.js — per-project tasks UI (auto-seed + title renames + date rules)
 // Columns: Assignee | Task | Done | Start | Due | Notes
@@ -172,7 +175,9 @@ const DATE_RULES = [
     base:'anchor.start', offsetDays:+14 },
 
   // Initial Consultation anchors
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Confirm Initial Consultation', field:'due'}, base:'anchor.start', offsetDays:-5 },
+  { when:{title:'Have Initial Consultation', on:'start'},
+    target:{title:'Confirm Initial Consultation', field:'due'},
+    base:'anchor.start', offsetDays:-5 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Prepare Client Dossier',       field:'due'}, base:'anchor.start', offsetDays:-5 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk",    field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
@@ -501,7 +506,10 @@ async function forceNudgeDueFromSend(sendStartYMD) {
 }
 
 // ---------- Lifecycle ----------
-document.addEventListener('projectLoaded', (ev) => { initTasksUI(ev.detail); });
+document.addEventListener('projectLoaded', (ev) => {
+  console.log('[tasks] projectLoaded heard', ev?.detail?.id || ev?.detail);
+  initTasksUI(ev.detail);
+});
 
 async function initTasksUI(project) {
   const db = window.supabase;
@@ -536,22 +544,16 @@ async function initTasksUI(project) {
     <div id="tasksMsg" style="margin:.5rem 0; opacity:.75;"></div>
   `;
 
-  // Load tasks (post-normalization)
-  let tasks = await loadTasks(db, project.id);
-
-  // If none exist, seed, then reload
-  if (!tasks.length) {
-    try {
-      await seedFromTemplate(db, project);
-      // normalize once more in case templates just changed
-      await normalizeProjectTaskTitles(project.id);
-      tasks = await loadTasks(db, project.id);
-      flash('Task list created from template.');
-    } catch (e) {
-      console.error('Auto-seed failed:', e);
-      flash('Could not create tasks from template. Please try again later.');
-    }
-  }
+// Load tasks (post-normalization)
+let tasks = [];
+try {
+  tasks = await loadTasks(db, project.id);
+  console.log('[tasks] loaded', tasks?.length || 0);
+} catch (e) {
+  console.error('[tasks] load failed:', e);
+  flash('Could not load tasks (see console).');
+  tasks = [];
+}
 
   // Stable order
   tasks = (tasks || []).slice().sort((a,b) => {
