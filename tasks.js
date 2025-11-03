@@ -356,43 +356,65 @@ function _updateReceiveFinalPaymentHighlight(){
 }
 
 // ---------- Apply date rules ----------
-async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
+async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
   const db = window.supabase;
   if (!db || !_currentProjectId) return;
 
-  const relevant = DATE_RULES.filter(r => _normTitle(r.when.title) === _normTitle(anchorTitle) && r.when.on === fieldChanged);
-  for (const rule of relevant){
-    // Handle occurrences (1-based). For most tasks, it's 1.
-    const occ = rule.target.occurrence || 1;
-    const target = _findTaskByTitleOcc(rule.target.title, occ);
+  const anchorNorm = _normTitle(anchorTitle);
+
+  // Which rules fire for this change?
+  const relevant = DATE_RULES.filter(r =>
+    _normTitle(r.when.title) === anchorNorm &&
+    r.when.on === fieldChanged
+  );
+  if (!relevant.length) return;
+
+  for (const rule of relevant) {
+    // Find target task in this project (supports Nth occurrence)
+    const target = _findTaskByTitleOcc(rule.target.title, rule.target.occurrence || 1);
     if (!target) continue;
 
-    if (rule.onlyIfBlank){
+    // Respect "onlyIfBlank"
+    if (rule.onlyIfBlank) {
       const curr = (rule.target.field === 'due') ? target.due_date : target.start_date;
       if (curr) continue;
     }
 
-    const baseYMD = (rule.base === 'anchor.start' ? value : null);
+    // Base date for these rules is the changed anchor START
+    const baseYMD = (rule.base === 'anchor.start') ? value : null;
     if (!baseYMD) continue;
 
-    const newYMD = _computeTargetYMD(baseYMD, rule);
+    // Compute new date
+    const newYMD = _computeTargetYMD ? _computeTargetYMD(baseYMD, rule)
+                                     : addDaysYMD(baseYMD, rule.offsetDays || 0);
     if (!newYMD) continue;
 
-    if (rule.target.field === 'due'){
+    // Persist + update cache + update the visible input (no refresh needed)
+    if (rule.target.field === 'due') {
       await updateTaskDue(target.id, newYMD);
       target.due_date = newYMD;
+
       const row = document.getElementById(`task-${target.id}`);
-      const el = row?.querySelector('input[data-action="due"]');
-      if (el){ el.value = newYMD; syncDateEmptyClass(el); }
+      const dueInput = row?.querySelector('input[data-action="due"]');
+      if (dueInput) {
+        dueInput.value = newYMD;          // update UI immediately
+        dueInput.classList.remove('date-empty');
+      }
     } else {
       await updateTaskStart(target.id, newYMD);
       target.start_date = newYMD;
+
       const row = document.getElementById(`task-${target.id}`);
-      const el = row?.querySelector('input[data-action="start"]');
-      if (el){ el.value = newYMD; syncDateEmptyClass(el); }
+      const startInput = row?.querySelector('input[data-action="start"]');
+      if (startInput) {
+        startInput.value = newYMD;        // update UI immediately
+        startInput.classList.remove('date-empty');
+      }
     }
   }
-  _updateReceiveFinalPaymentHighlight();
+
+  // Special visual rule you added earlier
+  _updateReceiveFinalPaymentHighlight?.();
 }
 
 // ---------- Lifecycle ----------
@@ -574,14 +596,25 @@ function renderTasks(tasks){
       closeAssigneeMenus(); flash('Assignees cleared.');
     });
 
-    row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null;
-      await updateTaskStart(id, v);
-      const local = _currentTasks.find(x => String(x.id) === String(id));
-      if (local) local.start_date = v;
-      await applyDateRulesAfterChange({ anchorTitle: (local?.title ?? ''), fieldChanged:'start', value:v });
-      flash('Start date updated.');
-    });
+   row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+  const v = e.target.value || null;
+
+  // Persist start date
+  await updateTaskStart(id, v);
+
+  // Keep local cache in sync
+  const local = _currentTasks.find(x => String(x.id) === String(id));
+  if (local) local.start_date = v;
+
+  // Fire rules → calculate any downstream due dates immediately and reflect in UI
+  await applyDateRulesAfterChange({
+    anchorTitle: (local?.title ?? ''),
+    fieldChanged: 'start',
+    value: v
+  });
+
+  flash('Start date updated.');
+});
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
