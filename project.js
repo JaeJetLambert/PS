@@ -4,8 +4,9 @@
 // Dispatches "projectLoaded" once project is fetched
 // ===============================
 
-// Supabase client (created in project.html above this script)
-const db = window.supabase;
+// IMPORTANT: don't capture window.supabase too early.
+// We'll wait until it's ready in init().
+let db = null;
 
 // --- URL params: prefer id, fallback to name ----------------------
 const params   = new URLSearchParams(location.search);
@@ -35,6 +36,18 @@ const abandonNotesInput = document.getElementById('abandonNotesInput');
 const abandonConfirmBtn = document.getElementById('abandonConfirmBtn');
 
 let project = null;
+
+// --- tiny helper: wait for Supabase to exist ----------------------
+async function waitForSupabase(maxMs = 4000) {
+  const t0 = Date.now();
+  while (!window.supabase) {
+    await new Promise(r => setTimeout(r, 40));
+    if (Date.now() - t0 > maxMs) {
+      throw new Error('Supabase client not initialized on window.supabase');
+    }
+  }
+  return window.supabase;
+}
 
 // --- Data access ---------------------------------------------------
 async function fetchProject() {
@@ -84,7 +97,6 @@ function computeDefaultAssigneesForProject(role, projectRow) {
 }
 
 async function ensureMissingTemplateTasks(projectRow) {
-  const db = window.supabase;
   if (!db || !projectRow?.id) return;
 
   // 1) Load templates (ordered)
@@ -140,8 +152,8 @@ async function ensureMissingTemplateTasks(projectRow) {
 // --- Rendering -----------------------------------------------------
 function renderInfo() {
   if (!project) {
-    title.textContent = 'Project not found';
-    info.textContent = '';
+    title && (title.textContent = 'Project not found');
+    if (info) info.textContent = '';
     if (btnDone) btnDone.disabled = true;
     if (btnAbandon) btnAbandon.disabled = true;
     if (reactivateBtn) reactivateBtn.style.display = 'none';
@@ -165,15 +177,17 @@ function renderInfo() {
     project.abandon_reason   ? `<p><strong>Abandon Notes:</strong> ${project.abandon_reason}</p>`       : ''
   ].join('');
 
-  title.textContent = project.name;
-  info.innerHTML = `
-    <p><strong>Designer:</strong> ${project.designer || ''}</p>
-    <p><strong>Start Date:</strong> ${project.startDate || ''}</p>
-    <p><strong>Status:</strong> ${project.status}</p>
-    ${completedBadge}
-    ${abandonedBadge}
-    ${notesBlocks}
-  `;
+  if (title) title.textContent = project.name;
+  if (info) {
+    info.innerHTML = `
+      <p><strong>Designer:</strong> ${project.designer || ''}</p>
+      <p><strong>Start Date:</strong> ${project.startDate || ''}</p>
+      <p><strong>Status:</strong> ${project.status}</p>
+      ${completedBadge}
+      ${abandonedBadge}
+      ${notesBlocks}
+    `;
+  }
 
   const isCompleted = project.status === 'completed';
   const isAbandoned = project.status === 'abandoned';
@@ -187,7 +201,6 @@ function renderInfo() {
 
 // --- Complete modal helpers ---------------------------------------
 function openCompleteModal() {
-  // default date to today (YYYY-MM-DD)
   const today = new Date();
   const yyyy = today.getFullYear();
   const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -235,7 +248,7 @@ btnDone?.addEventListener('click', () => {
 
 // Complete modal → Done (save)
 completeConfirmBtn?.addEventListener('click', async () => {
-  if (!project) return;
+  if (!project || !db) return;
 
   completeConfirmBtn.disabled = true;
   const oldLabel = completeConfirmBtn.textContent;
@@ -278,7 +291,7 @@ btnAbandon?.addEventListener('click', () => {
 
 // Abandon modal → Done (notes required)
 abandonConfirmBtn?.addEventListener('click', async () => {
-  if (!project) return;
+  if (!project || !db) return;
 
   const notes = (abandonNotesInput?.value || '').trim();
   if (!notes) { alert('Please enter who abandoned and why.'); return; }
@@ -312,7 +325,7 @@ abandonConfirmBtn?.addEventListener('click', async () => {
 
 // Reactivate abandoned → back to active
 reactivateBtn?.addEventListener('click', async () => {
-  if (!project || project.status !== 'abandoned') return;
+  if (!project || project.status !== 'abandoned' || !db) return;
 
   const ok = confirm('Reactivate this project back to Active?');
   if (!ok) return;
@@ -406,24 +419,38 @@ deleteBtn?.addEventListener('click', async () => {
 // --- Initial load --------------------------------------------------
 async function init() {
   try {
+    // 1) Ensure Supabase is ready and store it
+    db = await waitForSupabase();
+
+    // 2) Fetch project row
     project = await fetchProject();
   } catch (e) {
     console.error('Fetch failed:', e);
     project = null;
   }
 
+  // 3) Render the top info panel
   renderInfo();
 
-  // Fill in any missing template tasks, then let tasks.js render
+  // 4) Backfill any missing template tasks (safe no-op if none)
   try {
-    await ensureMissingTemplateTasks(project);
+    if (project) await ensureMissingTemplateTasks(project);
   } catch (e) {
     console.warn('ensureMissingTemplateTasks failed:', e);
   }
 
-  // Signal to tasks.js that project is ready
-  document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
+  // 5) 🔔 Tell tasks.js "project is ready" (this is Step 2)
+  if (project) {
+    document.dispatchEvent(new CustomEvent('projectLoaded', { detail: project }));
+  } else {
+    // Optional: if no project, still notify so tasks.js can bail gracefully
+    document.dispatchEvent(new CustomEvent('projectLoaded', { detail: null }));
+  }
 }
 
-// Run after DOM is ready
-document.addEventListener('DOMContentLoaded', init);
+// Run immediately if DOM is already parsed (defer-safe), otherwise wait.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -1,3 +1,4 @@
+console.log('tasks.js LIVE', Date.now());
 // ===============================
 // tasks.js — per-project tasks UI (auto-seed + title renames + date rules)
 // Columns: Assignee | Task | Done | Start | Due | Notes
@@ -419,10 +420,6 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
     }
   }
 
-  _updateReceiveFinalPaymentHighlight?.();
-}
-
-  // Special visual rule you added earlier
   _updateReceiveFinalPaymentHighlight?.();
 }
 

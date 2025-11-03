@@ -97,9 +97,17 @@
     );
   </script>
 
+<!-- Supabase bundle + your createClient init first -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  window.supabase = supabase.createClient('https://YOUR_PROJECT.supabase.co','eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNkcmlueGp3bnpldGNmdmljd21sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg5MjM1ODcsImV4cCI6MjA3NDQ5OTU4N30.TZ4Fkb5hnlWEHYfGue9dDKbP6QXUJCmN9_SC15z7fQY');
+</script>
   <script src="nav.js" defer></script>
   <script src="ux.js" defer></script>
-  <script src="tasks.js" defer></script>
-  <script src="project.js" defer></script>
+  <!-- ✅ tasks rules + UI must load first -->
+<script src="tasks.js?v=20251103a" defer></script>
+
+<!-- ✅ then the page controller that will dispatch the event -->
+<script src="project.js?v=20251103a" defer></script>
 </body>
 </html>
