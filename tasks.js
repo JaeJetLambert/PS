@@ -43,62 +43,297 @@ function ymdLocal(d = new Date()){
   return `${y}-${m}-${day}`;
 }
 
-// Pick the "next due" task id from a project's task list
-function findNextDueTaskId(tasks){
-  if (!Array.isArray(tasks) || !tasks.length) return null;
+// --- Title normalization / aliases (for matching rules to DB rows) -
+function _normalizeQuotes(s){ return (s||'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"'); }
+function _normTitle(s){ return _normalizeQuotes(String(s||'').trim()).toLowerCase(); }
+const TITLE_ALIAS = new Map([
+  // Tab/Tap variants
+  ['weekly double tap - sign design agreement', 'Weekly Double Tab - Sign Design Agreement'],
+  ['weekly double tab - sign design agreement', 'Weekly Double Tab - Sign Design Agreement'],
+  ['weekly double tap - send ip to client', 'Weekly Double Tap - Send IP to Client'],
+  ['weekly double tab - send ip to client', 'Weekly Double Tap - Send IP to Client'],
 
-  const today = ymdLocal();
-  const open = tasks.filter(t => t.status !== 'done');
+  // Signed/Sign variants
+  ['sign design agreement', 'Signed Design Agreement'],
+  ['signed design agreement', 'Signed Design Agreement'],
 
-  // 1) Due today or future: earliest date wins
-  const future = open.filter(t => t.due_date && t.due_date >= today)
-    .sort((a,b) => (a.due_date === b.due_date)
-      ? ((a.position??9e9) - (b.position??9e9))
-      : a.due_date.localeCompare(b.due_date)
-    );
-  if (future[0]) return future[0].id;
+  // Smart quotes & small drifts
+  ["clipboard on katie’s desk", "Clipboard on Katie's Desk"],
+  ["folder on sarah’s desk",  "Folder on Sarah's Desk"],
+  ['send sub meeting review email to client', 'Send Sum Meeting Review Email to Client'], // “Sub” vs “Sum”
+  ['pm punch list', 'PM punch list'],
 
-  // 2) Overdue: the one closest to today (latest past date)
-  const overdue = open.filter(t => t.due_date && t.due_date < today)
-    .sort((a,b) => (a.due_date === b.due_date)
-      ? ((a.position??9e9) - (b.position??9e9))
-      : b.due_date.localeCompare(a.due_date)
-    );
-  if (overdue[0]) return overdue[0].id;
+  // IP wording
+  ['send initial presentation', 'Send Initial Presentation to Client'],
+  ['send initial presentation to client', 'Send Initial Presentation to Client'],
+]);
+function _canonical(t){
+  const key = _normTitle(t);
+  for (const [k,v] of TITLE_ALIAS.entries()){
+    if (key === _normTitle(k)) return v;
+  }
+  return t;
+}
 
-  // 3) No due dates: first open by position/created_at
-  const byPos = open.slice().sort((a,b) => {
+// --- Date math helpers ---------------------------------------------
+function addDaysYMD(ymd, days){
+  if (!ymd) return null;
+  const [y,m,d] = ymd.split('-').map(Number);
+  const dt = new Date(y,(m||1)-1,(d||1));
+  dt.setDate(dt.getDate() + (days||0));
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  const dd = String(dt.getDate()).padStart(2,'0');
+  return `${yy}-${mm}-${dd}`;
+}
+function _prevFriday(beforeYMD){
+  if (!beforeYMD) return null;
+  const [y,m,d] = beforeYMD.split('-').map(Number);
+  const dt = new Date(y,(m||1)-1,(d||1));
+  dt.setDate(dt.getDate()-1);
+  while (dt.getDay() !== 5) dt.setDate(dt.getDate()-1);
+  return dt.toISOString().slice(0,10);
+}
+function _nextFriday(afterYMD){
+  if (!afterYMD) return null;
+  const [y,m,d] = afterYMD.split('-').map(Number);
+  const dt = new Date(y,(m||1)-1,(d||1));
+  dt.setDate(dt.getDate()+1);
+  while (dt.getDay() !== 5) dt.setDate(dt.getDate()+1);
+  return dt.toISOString().slice(0,10);
+}
+function _secondFridayAfter(startYMD){
+  const first = _nextFriday(startYMD);
+  return addDaysYMD(first, 7);
+}
+function _computeTargetYMD(baseYMD, rule){
+  if (!baseYMD) return null;
+  switch (rule.calc){
+    case 'prevFriday':   return _prevFriday(baseYMD);
+    case 'nextFriday':   return _nextFriday(baseYMD);
+    case 'secondFriday': return _secondFridayAfter(baseYMD);
+    default:             return addDaysYMD(baseYMD, rule.offsetDays||0);
+  }
+}
+
+// --- In-memory task lookup ----------------------------------------
+function _tasksOrdered(){
+  return (_currentTasks||[]).slice().sort((a,b)=>{
     const pa = (a.position ?? 9e9), pb = (b.position ?? 9e9);
     if (pa !== pb) return pa - pb;
     return String(a.created_at||'').localeCompare(String(b.created_at||''));
   });
-  return byPos[0]?.id ?? null;
+}
+// Find the Nth occurrence (1-based) of a title in this project
+function _findTaskByTitleOcc(title, occ=1){
+  const needle = _normTitle(_canonical(title));
+  const matches = _tasksOrdered().filter(t => _normTitle(_canonical(t.title)) === needle);
+  return matches[(occ||1)-1] || null;
 }
 
-// Map role string to default assignees array (supports comma/plus combos)
-function computeDefaultAssignees(role, project) {
-  if (!role) return [];
-  const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
-  const out = [];
-  for (let p of parts) {
-    p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
-    const low = p.toLowerCase();
-    if (!p) continue;
+// --- RULES (synced to your latest task names) ----------------------
+// SCHEMA:
+// when:{title, on:'start'|'due'}  target:{title, field:'start'|'due', occurrence?}
+// base:'anchor.start'|'anchor.due'  + either offsetDays:int OR calc:'prevFriday'|'nextFriday'|'secondFriday'
+// onlyIfBlank?: true -> only set if target field is empty
+const DATE_RULES = [
+  // Process Doc / Nudge
+  { when:{title:'Send the Process Document', on:'start'}, target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  { when:{title:'Nudge Process Document',    on:'start'}, target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14 },
 
-    if (low.includes('designer')) {
-      out.push(project.designer || 'Designer');
-    } else if (low === 'admin') {
-      out.push('Admin');
-    } else if (low === 'project manager' || low === 'pm') {
-      out.push('PM');
+  // Initial Consultation anchors
+  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Confirm Initial Consultation', field:'due'}, base:'anchor.start', offsetDays:-5 },
+  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Prepare Client Dossier',       field:'due'}, base:'anchor.start', offsetDays:-5 },
+  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk",    field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
+
+  // Agreement follow-ups
+  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  { when:{title:'Weekly Double Tab - Sign Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
+
+  // After agreement is signed (milestone)
+  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure',  field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Make Google Drive Folder',       field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Create Client Accounts in Both XERO Accounts', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Execute Pictures and Measure',   field:'due'}, base:'anchor.start', offsetDays:+7 },
+
+  // Photos / measure branch
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Receive Deposit',                    field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send P&M Review Email to Client',    field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:"Folder on Sarah's Desk",             field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Upload Pics to Google Photos',       field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Share Pics With Everyone on the Project', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send Initial Presentation to Client', field:'due'}, base:'anchor.start', offsetDays:+14 },
+
+  // IP weekly double tap
+  { when:{title:'Send Initial Presentation to Client', on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  { when:{title:'Weekly Double Tap - Send IP to Client', on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14 },
+
+  // Client review → schedule specific presentation
+  { when:{title:'Client Sends Review', on:'start'}, target:{title:'Schedule Specific Presentation', field:'due'}, base:'anchor.start', offsetDays:+21 },
+
+  // Specific Presentation Meeting downstream
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Spreadsheet',                   field:'due'}, base:'anchor.start', offsetDays:-3 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Price Spreadsheet',                    field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Sub Packet for Quick Price',    field:'due'}, base:'anchor.start', offsetDays:-3 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Quick Price Cons',                     field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Designer Creates Sub Notes',           field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Send Sub Notes to Katie ',             field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Schedule Sub Meeting',                 field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Sub Meeting',                          field:'due'}, base:'anchor.start', offsetDays:+14 },
+
+  // After Sub Meeting
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Sum Meeting Review Email to Client', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Updates to Katie + Designer',        field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Update Sub Notes and Drawings Based on Feedback', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Price Construction Job',                  field:'due'}, base:'anchor.start', offsetDays:+28 },
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Schedule Final Pricing + Specifics Meeting', field:'due'}, base:'anchor.start', offsetDays:+28 },
+  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Final Pricing + Specifics Meeting',       field:'due'}, base:'anchor.start', offsetDays:+28 },
+
+  // Final Pricing + Specifics Meeting fan-out
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final pricing printout emailed or in client drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final Pricing Printouts, Calendar, and Contract Ready in Client Drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Send SP Review Email to Client', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Designer Edits', field:'due'}, base:'anchor.start', offsetDays:+3 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Pricer Edits',   field:'due'}, base:'anchor.start', offsetDays:+3 },
+  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Sign Contract',   field:'due'}, base:'anchor.start', offsetDays:+7 },
+
+  // Post Sign Contract fan-out
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Receive Payment from Clients', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Hit Approve Invoice',         field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Drapery Final Measure', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Drapery Final Measure',          field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Drapery Diagram',                field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Design Items',             field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Prepare Warehousing Bay',        field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Finalize Drawings and Print',    field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Do Legacy stone details and sign offs', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Designer add all docs to google drive', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add all docs to google drive',         field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Construction Things (wallpaper?)', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Subs',                  field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Make PM Packet',                 field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add Events to Construction Calendar', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Update construction start and completion date on lines', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Put Subcontractor Bills into Xero', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Ferguson',                field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add to Payment Calendar',       field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Sign Contract', on:'start'}, target:{title:'Cadenced Follow Up to Designer and client', field:'due'}, base:'anchor.start', offsetDays:+7 },
+
+  // Optional tie
+  { when:{title:'Add all docs to google drive', on:'start'}, target:{title:'Update construction start and completion date on lines', field:'due'}, base:'anchor.start', offsetDays:0 },
+
+  // Construction timeline anchors
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer meet with DJ',  field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer do PSG sign offs', field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Final Friday Walkthrough', field:'due'}, base:'anchor.start', calc:'prevFriday' },
+
+  // Weekly cadence
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'PMs Bring Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Create Invoices and bills to Reflect Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
+
+  // Designer visits cadence
+  { when:{title:'Final Friday Walkthrough', on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', offsetDays:+14 },
+  { when:{title:'Designer Visits Job',     on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', calc:'secondFriday' },
+
+  // Staged payments
+  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Receive Payment 2', field:'due'}, base:'anchor.start', offsetDays:+28 },
+  { when:{title:'Receive Payment 2',       on:'start'}, target:{title:'Receive Payment 3', field:'due'}, base:'anchor.start', offsetDays:+28 },
+
+  // Completion anchors
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:1}, base:'anchor.start', offsetDays:-28 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:2}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Install', field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Roland',  field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Thomas',  field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Movers',  field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Punch walk with client', field:'due'}, base:'anchor.start', offsetDays:-14 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'PM punch list ', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Completion walk', field:'due'}, base:'anchor.start', offsetDays:0 },
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Designer Celebration walk', field:'due'}, base:'anchor.start', offsetDays:+7 },
+
+  // Install chain
+  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Install + Style', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Email Accessories Allowance to Designer', field:'due'}, base:'anchor.start', offsetDays:-1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Prep Accessories for Install',          field:'due'}, base:'anchor.start', offsetDays:-1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Prepare/load for install',               field:'due'}, base:'anchor.start', offsetDays:-1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Manage Broken and Rejected Shit',        field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Email Recap of Install and Accessories Left', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Prepare and send Final Bill and accessories ', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Accessories Review ', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Install + Style', on:'start'}, target:{title:'Pick Up Accessories', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Pick Up Accessories', on:'start'}, target:{title:'Finalize and Send Final Bill', field:'due'}, base:'anchor.start', offsetDays:+1 },
+  { when:{title:'Finalize and Send Final Bill', on:'start'}, target:{title:'Receive Final Payment', field:'due'}, base:'anchor.start', offsetDays:+7 },
+  { when:{title:'Receive Final Payment', on:'start'}, target:{title:'Archive shared drive folder', field:'due'}, base:'anchor.start', offsetDays:+7 },
+];
+
+// Special visual: highlight “Receive Final Payment” when due & not done
+function _updateReceiveFinalPaymentHighlight(){
+  const t = _findTaskByTitleOcc('Receive Final Payment', 1);
+  if (!t) return;
+  const row = document.getElementById(`task-${t.id}`);
+  if (!row) return;
+  const dueInput = row.querySelector('input[data-action="due"]');
+  const today = ymdLocal();
+  if (t.due_date && t.status !== 'done' && today >= t.due_date){
+    if (dueInput){
+      dueInput.style.borderColor = '#b91c1c';
+      dueInput.style.background = 'rgba(220,38,38,.08)';
+    }
+  } else if (dueInput){
+    dueInput.style.borderColor = '';
+    dueInput.style.background = '';
+  }
+}
+
+// Apply rules after a field change on a task (called from Start change)
+async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
+  const db = window.supabase;
+  if (!db || !_currentProjectId) return;
+
+  const anchorNorm = _normTitle(_canonical(anchorTitle));
+  const relevant = DATE_RULES.filter(r =>
+    _normTitle(_canonical(r.when.title)) === anchorNorm && r.when.on === fieldChanged
+  );
+
+  for (const rule of relevant){
+    const target = _findTaskByTitleOcc(rule.target.title, rule.target.occurrence || 1);
+    if (!target) continue;
+
+    if (rule.onlyIfBlank){
+      const curr = (rule.target.field === 'due') ? target.due_date : target.start_date;
+      if (curr) continue;
+    }
+
+    const baseYMD = (rule.base === 'anchor.start' ? value : null);
+    if (!baseYMD) continue;
+
+    const newYMD = _computeTargetYMD(baseYMD, rule);
+    if (!newYMD) continue;
+
+    if (rule.target.field === 'due'){
+      await updateTaskDue(target.id, newYMD);
+      target.due_date = newYMD;
+      const row = document.getElementById(`task-${target.id}`);
+      if (row){
+        const el = row.querySelector('input[data-action="due"]');
+        if (el){ el.value = newYMD; syncDateEmptyClass(el); }
+      }
     } else {
-      out.push(p);
+      await updateTaskStart(target.id, newYMD);
+      target.start_date = newYMD;
+      const row = document.getElementById(`task-${target.id}`);
+      if (row){
+        const el = row.querySelector('input[data-action="start"]');
+        if (el){ el.value = newYMD; syncDateEmptyClass(el); }
+      }
     }
   }
-  return Array.from(new Set(out.filter(Boolean)));
+
+  _updateReceiveFinalPaymentHighlight();
 }
 
-// project.js dispatches this after it loads the project
+// --- Lifecycle -----------------------------------------------------
 document.addEventListener('projectLoaded', (ev) => {
   const project = ev.detail;
   initTasksUI(project);
@@ -152,7 +387,7 @@ async function initTasksUI(project) {
   });
 
   _currentProjectId = project.id;
-  _currentTasks = tasks.slice(); // keep a local snapshot for title lookups
+  _currentTasks = tasks.slice(); // keep a local snapshot for rule lookups
 
   // Render table
   renderTasks(tasks);
@@ -172,6 +407,9 @@ async function initTasksUI(project) {
       });
     }
   }
+
+  // Do an initial highlight pass (in case data already meets condition)
+  _updateReceiveFinalPaymentHighlight();
 }
 
 function flash(msg) {
@@ -214,307 +452,10 @@ window.addEventListener('hashchange', () => {
   maybeScrollToTaskFromHash();
 });
 
-// ========== DATE RULES ENGINE (drop-in) =====================================
-// Normalization helpers (titles with smart quotes, case, spacing)
-function _normalizeQuotes(s){ return (s||'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"'); }
-function _normTitle(s){ return _normalizeQuotes(String(s||'').trim()).toLowerCase(); }
-
-// YYYY-MM-DD math (local)
-function addDaysYMD(ymd, days){
-  if (!ymd) return null;
-  const [y,m,d] = ymd.split('-').map(Number);
-  const dt = new Date(y,(m||1)-1,(d||1));
-  dt.setDate(dt.getDate() + (days||0));
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth()+1).padStart(2,'0');
-  const dd = String(dt.getDate()).padStart(2,'0');
-  return `${yy}-${mm}-${dd}`;
-}
-
-// Friday calculators
-function _prevFriday(beforeYMD){
-  if (!beforeYMD) return null;
-  const [y,m,d] = beforeYMD.split('-').map(Number);
-  const dt = new Date(y,(m||1)-1,(d||1));
-  // strictly before → step one day back first
-  dt.setDate(dt.getDate()-1);
-  while (dt.getDay() !== 5) dt.setDate(dt.getDate()-1); // 5 = Friday
-  return dt.toISOString().slice(0,10);
-}
-function _nextFriday(afterYMD){
-  if (!afterYMD) return null;
-  const [y,m,d] = afterYMD.split('-').map(Number);
-  const dt = new Date(y,(m||1)-1,(d||1));
-  // strictly after → step one day forward first
-  dt.setDate(dt.getDate()+1);
-  while (dt.getDay() !== 5) dt.setDate(dt.getDate()+1);
-  return dt.toISOString().slice(0,10);
-}
-function _secondFridayAfter(startYMD){
-  const first = _nextFriday(startYMD);
-  return addDaysYMD(first, 7);
-}
-
-// In-memory snapshot is kept in _currentTasks (set in initTasksUI)
-function _tasksOrdered(){
-  return (_currentTasks||[]).slice().sort((a,b)=>{
-    const pa = (a.position ?? 9e9), pb = (b.position ?? 9e9);
-    if (pa !== pb) return pa - pb;
-    return String(a.created_at||'').localeCompare(String(b.created_at||''));
-  });
-}
-
-// Find the Nth occurrence (1-based) of a title in this project
-function _findTaskByTitleOcc(title, occ=1){
-  const needle = _normTitle(title);
-  const matches = _tasksOrdered().filter(t => _normTitle(t.title) === needle);
-  return matches[(occ||1)-1] || null;
-}
-
-// --- Title aliases (map tiny wording/spelling differences to your canonical names) ---
-const TITLE_ALIAS = new Map([
-  // Tap vs Tab (use your canonical 'Tab')
-  ['weekly double tap - sign design agreement', 'Weekly Double Tab - Sign Design Agreement'],
-  ['weekly double tab - sign design agreement', 'Weekly Double Tab - Sign Design Agreement'],
-  ['weekly double tap - send ip to client', 'Weekly Double Tap - Send IP to Client'],
-  ['weekly double tab - send ip to client', 'Weekly Double Tap - Send IP to Client'],
-
-  // Signed/Sign variants
-  ['sign design agreement', 'Signed Design Agreement'],
-  ['signed design agreement', 'Signed Design Agreement'],
-
-  // Smart quotes & minor typos
-  ["clipboard on katie’s desk", "Clipboard on Katie's Desk"],
-  ["folder on sarah’s desk",  "Folder on Sarah's Desk"],
-  ['send sub meeting review email to client', 'Send Sum Meeting Review Email to Client'], // handles “Sub” vs “Sum”
-  ['pm punch list', 'PM punch list'],
-
-  // IP wording
-  ['send initial presentation', 'Send Initial Presentation to Client'],
-  ['send initial presentation to client', 'Send Initial Presentation to Client'],
-]);
-
-function _resolveTitle(t){
-  const key = _normTitle(t);
-  for (const [k,v] of TITLE_ALIAS.entries()){
-    if (key === _normTitle(k)) return v;
-  }
-  return t;
-}
-}
-
-// SCHEMA:
-// when:{title, on:'start'|'due'}  target:{title, field:'start'|'due', occurrence?}
-// base:'anchor.start'|'anchor.due'  + either offsetDays:int OR calc:'prevFriday'|'nextFriday'|'secondFriday'
-// onlyIfBlank?: true -> only set if target field is empty
-
-const DATE_RULES = [
-  // ===== Process Document / Nudge =====
-  { when:{title:'Send the Process Document', on:'start'}, target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Nudge Process Document',    on:'start'}, target:{title:'Nudge Process Document', field:'due'}, base:'anchor.start', offsetDays:+14 },
-
-  // ===== Initial Consultation anchors =====
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Confirm Initial Consultation', field:'due'}, base:'anchor.start', offsetDays:-5 },
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Prepare Client Dossier',       field:'due'}, base:'anchor.start', offsetDays:-5 },
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk",    field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
-
-  // ===== Agreement follow-ups =====
-  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Weekly Double Tab - Sign Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
-
-  // ===== After agreement is signed (milestone) =====
-  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure',  field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Make Google Drive Folder',       field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Create Client Accounts in Both XERO Accounts', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Execute Pictures and Measure',   field:'due'}, base:'anchor.start', offsetDays:+7 },
-
-  // ===== Photos / measure branch =====
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Receive Deposit',                    field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send P&M Review Email to Client',    field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:"Folder on Sarah's Desk",             field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Upload Pics to Google Photos',       field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Share Pics With Everyone on the Project', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Execute Pictures and Measure', on:'start'}, target:{title:'Send Initial Presentation to Client', field:'due'}, base:'anchor.start', offsetDays:+14 },
-
-  // ===== IP weekly double tap =====
-  { when:{title:'Send Initial Presentation to Client', on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Weekly Double Tap - Send IP to Client', on:'start'}, target:{title:'Weekly Double Tap - Send IP to Client', field:'due'}, base:'anchor.start', offsetDays:+14 },
-
-  // ===== Client review → schedule specific presentation =====
-  { when:{title:'Client Sends Review', on:'start'}, target:{title:'Schedule Specific Presentation', field:'due'}, base:'anchor.start', offsetDays:+21 },
-
-  // ===== Specific Presentation Meeting downstream =====
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Spreadsheet',                   field:'due'}, base:'anchor.start', offsetDays:-3 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Price Spreadsheet',                    field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Create Sub Packet for Quick Price',    field:'due'}, base:'anchor.start', offsetDays:-3 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Quick Price Cons',                     field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Designer Creates Sub Notes',           field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Send Sub Notes to Katie ',             field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Schedule Sub Meeting',                 field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Specific Presentation Meeting', on:'start'}, target:{title:'Sub Meeting',                          field:'due'}, base:'anchor.start', offsetDays:+14 },
-
-  // ===== After Sub Meeting =====
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Sum Meeting Review Email to Client', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Send Updates to Katie + Designer',        field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Update Sub Notes and Drawings Based on Feedback', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Price Construction Job',                  field:'due'}, base:'anchor.start', offsetDays:+28 },
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Schedule Final Pricing + Specifics Meeting', field:'due'}, base:'anchor.start', offsetDays:+28 },
-  { when:{title:'Sub Meeting', on:'start'}, target:{title:'Final Pricing + Specifics Meeting',       field:'due'}, base:'anchor.start', offsetDays:+28 },
-
-  // ===== Final Pricing + Specifics Meeting fan-out =====
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final pricing printout emailed or in client drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Final Pricing Printouts, Calendar, and Contract Ready in Client Drawer', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Send SP Review Email to Client', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Designer Edits', field:'due'}, base:'anchor.start', offsetDays:+3 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Pricer Edits',   field:'due'}, base:'anchor.start', offsetDays:+3 },
-  { when:{title:'Final Pricing + Specifics Meeting', on:'start'}, target:{title:'Sign Contract',   field:'due'}, base:'anchor.start', offsetDays:+7 },
-
-  // ===== Post Sign Contract fan-out =====
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Receive Payment from Clients', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Hit Approve Invoice',         field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Drapery Final Measure', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Drapery Final Measure',          field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Drapery Diagram',                field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Design Items',             field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Prepare Warehousing Bay',        field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Finalize Drawings and Print',    field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Do Legacy stone details and sign offs', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Designer add all docs to google drive', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add all docs to google drive',         field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Construction Things (wallpaper?)', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Schedule Subs',                  field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Make PM Packet',                 field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add Events to Construction Calendar', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Update construction start and completion date on lines', field:'due'}, base:'anchor.start', offsetDays:+7 }, // if you prefer to key it from "Add all docs..." see rule below
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Put Subcontractor Bills into Xero', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Order Ferguson',                field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Add to Payment Calendar',       field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Sign Contract', on:'start'}, target:{title:'Cadenced Follow Up to Designer and client', field:'due'}, base:'anchor.start', offsetDays:+7 },
-
-  // Optionally: tie “Update construction start…” directly to “Add all docs…” start
-  { when:{title:'Add all docs to google drive', on:'start'}, target:{title:'Update construction start and completion date on lines', field:'due'}, base:'anchor.start', offsetDays:0 },
-
-  // ===== Construction timeline anchors =====
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer meet with DJ',  field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Designer do PSG sign offs', field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Final Friday Walkthrough', field:'due'}, base:'anchor.start', calc:'prevFriday' },
-
-  // Weekly cadence: first due = next Friday after start
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'PMs Bring Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Create Invoices and bills to Reflect Change Orders', field:'due'}, base:'anchor.start', calc:'nextFriday' },
-
-  // Designer visits cadence
-  { when:{title:'Final Friday Walkthrough', on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', offsetDays:+14 },
-  { when:{title:'Designer Visits Job',     on:'start'}, target:{title:'Designer Visits Job', field:'due'}, base:'anchor.start', calc:'secondFriday' },
-
-  // Staged payments
-  { when:{title:'Construction Job Starts', on:'start'}, target:{title:'Receive Payment 2', field:'due'}, base:'anchor.start', offsetDays:+28 },
-  { when:{title:'Receive Payment 2',       on:'start'}, target:{title:'Receive Payment 3', field:'due'}, base:'anchor.start', offsetDays:+28 },
-
-  // ===== Completion anchors =====
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:1}, base:'anchor.start', offsetDays:-28 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Update Jae on Install Timing', field:'due', occurrence:2}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Install', field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Roland',  field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Thomas',  field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Schedule Movers',  field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Punch walk with client', field:'due'}, base:'anchor.start', offsetDays:-14 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'PM punch list ', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Completion walk', field:'due'}, base:'anchor.start', offsetDays:0 },
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Designer Celebration walk', field:'due'}, base:'anchor.start', offsetDays:+7 },
-
-  // ===== Install chain =====
-  { when:{title:'Construction Project Completion Date', on:'start'}, target:{title:'Install + Style', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Email Accessories Allowance to Designer', field:'due'}, base:'anchor.start', offsetDays:-1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Prep Accessories for Install',          field:'due'}, base:'anchor.start', offsetDays:-1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Prepare/load for install',               field:'due'}, base:'anchor.start', offsetDays:-1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Manage Broken and Rejected Shit',        field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Email Recap of Install and Accessories Left', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Prepare and send Final Bill and accessories ', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Accessories Review ', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Install + Style', on:'start'}, target:{title:'Pick Up Accessories', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Pick Up Accessories', on:'start'}, target:{title:'Finalize and Send Final Bill', field:'due'}, base:'anchor.start', offsetDays:+1 },
-  { when:{title:'Finalize and Send Final Bill', on:'start'}, target:{title:'Receive Final Payment', field:'due'}, base:'anchor.start', offsetDays:+7 },
-  { when:{title:'Receive Final Payment', on:'start'}, target:{title:'Archive shared drive folder', field:'due'}, base:'anchor.start', offsetDays:+7 },
-];
-
-// Compute target date from a base YMD and a rule
-function _computeTargetYMD(baseYMD, rule){
-  if (!baseYMD) return null;
-  switch (rule.calc){
-    case 'prevFriday':   return _prevFriday(baseYMD);
-    case 'nextFriday':   return _nextFriday(baseYMD);
-    case 'secondFriday': return _secondFridayAfter(baseYMD);
-    default:             return addDaysYMD(baseYMD, rule.offsetDays||0);
-  }
-}
-
-// Red highlight for “Receive Final Payment” when due and not done
-function _updateReceiveFinalPaymentHighlight(){
-  const t = _findTaskByTitleOcc('Receive Final Payment', 1);
-  if (!t) return;
-  const row = document.getElementById(`task-${t.id}`);
-  if (!row) return;
-  const dueInput = row.querySelector('input[data-action="due"]');
-  const today = ymdLocal();
-  if (t.due_date && t.status !== 'done' && today >= t.due_date){
-    if (dueInput){
-      dueInput.style.borderColor = '#b91c1c';
-      dueInput.style.background = 'rgba(220,38,38,.08)';
-    }
-  } else if (dueInput){
-    dueInput.style.borderColor = '';
-    dueInput.style.background = '';
-  }
-}
-
-// Main: apply rules when a task’s field changes (you already call this on start-change)
-async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }){
-  const db = window.supabase;
-  if (!db || !_currentProjectId) return;
-
-  const anchorNorm = _normTitle(anchorTitle);
-  const relevant = DATE_RULES.filter(r =>
-    _normTitle(r.when.title) === anchorNorm && r.when.on === fieldChanged
-  );
-
-  for (const rule of relevant){
-    const target = _findTaskByTitleOcc(rule.target.title, rule.target.occurrence || 1);
-    if (!target) continue;
-
-    if (rule.onlyIfBlank){
-      const curr = (rule.target.field === 'due') ? target.due_date : target.start_date;
-      if (curr) continue;
-    }
-
-    const baseYMD = (rule.base === 'anchor.start' ? value : null);
-    if (!baseYMD) continue;
-
-    const newYMD = _computeTargetYMD(baseYMD, rule);
-    if (!newYMD) continue;
-
-    if (rule.target.field === 'due'){
-      await updateTaskDue(target.id, newYMD);
-      target.due_date = newYMD;
-      const row = document.getElementById(`task-${target.id}`);
-      if (row){
-        const el = row.querySelector('input[data-action="due"]');
-        if (el) el.value = newYMD;
-      }
-    } else {
-      await updateTaskStart(target.id, newYMD);
-      target.start_date = newYMD;
-      const row = document.getElementById(`task-${target.id}`);
-      if (row){
-        const el = row.querySelector('input[data-action="start"]');
-        if (el) el.value = newYMD;
-      }
-    }
-  }
-
-  // Special highlight check
-  _updateReceiveFinalPaymentHighlight();
+// Hide ghost text when date input is empty; show when it has a value
+function syncDateEmptyClass(el){
+  const isEmpty = !el.value || String(el.value).trim() === '';
+  el.classList.toggle('date-empty', isEmpty);
 }
 
 // --- Render --------------------------------------------------------
@@ -619,25 +560,26 @@ function renderTasks(tasks) {
       flash('Assignees cleared.');
     });
 
+    // Start change → save + apply rules immediately
     row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
-  const v = e.target.value || null;
-  await updateTaskStart(id, v);
+      const v = e.target.value || null;
+      await updateTaskStart(id, v);
 
-  // keep local cache in sync
-  const local = _currentTasks.find(x => String(x.id) === String(id));
-  if (local) local.start_date = v;
+      // keep local cache in sync
+      const local = _currentTasks.find(x => String(x.id) === String(id));
+      if (local) local.start_date = v;
 
-  // fire rules & update UI immediately
-  await applyDateRulesAfterChange({
-    anchorTaskId: id,
-    anchorTitle: (local?.title ?? ''),
-    fieldChanged: 'start',
-    value: v
-  });
+      // fire rules & update UI immediately
+      await applyDateRulesAfterChange({
+        anchorTitle: (local?.title ?? ''),
+        fieldChanged: 'start',
+        value: v
+      });
 
-  flash('Start date updated.');
-});
+      flash('Start date updated.');
+    });
 
+    // Due change → save (cascades via task_dependencies table if present)
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
       await updateTaskDue(id, v);
@@ -646,7 +588,7 @@ function renderTasks(tasks) {
       const local = _currentTasks.find(x => String(x.id) === String(id));
       if (local) local.due_date = v;
 
-      await cascadeDependents(id); // if this is an anchor, bump dependents
+      await cascadeDependents(id);
       flash('Due date updated.');
     });
 
@@ -655,6 +597,7 @@ function renderTasks(tasks) {
       const checked = e.target.checked;
       await updateTaskStatus(id, checked ? 'done' : 'todo');
       flash(checked ? 'Marked complete.' : 'Marked todo.');
+      _updateReceiveFinalPaymentHighlight();
     });
 
     // Notes — auto-grow + debounced autosave + filled state
@@ -681,12 +624,6 @@ function renderTasks(tasks) {
 
   // Close menus when clicking anywhere else
   document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
-}
-
-// Hide ghost text when date input is empty; show when it has a value
-function syncDateEmptyClass(el){
-  const isEmpty = !el.value || String(el.value).trim() === '';
-  el.classList.toggle('date-empty', isEmpty);
 }
 
 // --- Assignee menu helpers ----------------------------------------
@@ -838,4 +775,27 @@ async function seedFromTemplate(db, project) {
     const { error: e2 } = await db.from('task_dependencies').insert(deps);
     if (e2) throw e2;
   }
+}
+
+// Map role string to default assignees array (supports comma/plus combos)
+function computeDefaultAssignees(role, project) {
+  if (!role) return [];
+  const parts = role.split(/[,+]/).map(s => s.trim()).filter(Boolean);
+  const out = [];
+  for (let p of parts) {
+    p = p.replace(/\.$/, ''); // "Admin." -> "Admin"
+    const low = p.toLowerCase();
+    if (!p) continue;
+
+    if (low.includes('designer')) {
+      out.push(project.designer || 'Designer');
+    } else if (low === 'admin') {
+      out.push('Admin');
+    } else if (low === 'project manager' || low === 'pm') {
+      out.push('PM');
+    } else {
+      out.push(p);
+    }
+  }
+  return Array.from(new Set(out.filter(Boolean)));
 }
