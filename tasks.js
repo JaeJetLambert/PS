@@ -10,6 +10,7 @@ const TASK_USERS = [
 let _openAssigneeRow = null;
 let _currentProjectId = null;
 let _currentTasks = [];
+let _titleIndex = new Map(); // title (normalized) -> [taskId, taskId, ...] in row order
 
 // ---------- Utils ----------
 function debounce(fn, delay = 600) {
@@ -123,10 +124,16 @@ function _tasksOrdered(){ return (_currentTasks||[]).slice().sort((a,b)=>{
   if (pa!==pb) return pa-pb;
   return String(a.created_at||'').localeCompare(String(b.created_at||''));
 });}
-function _findTaskByTitleOcc(title, occ=1){
-  const needle = _normTitle(title);
-  const matches = _tasksOrdered().filter(t => _normTitle(t.title) === needle);
-  return matches[(occ||1)-1] || null;
+function _findTaskByTitleOcc(title, occ = 1) {
+  const key = _normTitle(title);
+  const ids = _titleIndex.get(key);
+  if (!ids || !ids.length) return null;
+
+  const wantId = ids[(occ || 1) - 1];
+  if (!wantId) return null;
+
+  // return the live object from our in-memory list
+  return _currentTasks.find(t => String(t.id) === String(wantId)) || null;
 }
 
 // ---------- RULES (already aligned to your new names) ----------
@@ -361,8 +368,6 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
   if (!db || !_currentProjectId) return;
 
   const anchorNorm = _normTitle(anchorTitle);
-
-  // Which rules fire for this change?
   const relevant = DATE_RULES.filter(r =>
     _normTitle(r.when.title) === anchorNorm &&
     r.when.on === fieldChanged
@@ -370,35 +375,34 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
   if (!relevant.length) return;
 
   for (const rule of relevant) {
-    // Find target task in this project (supports Nth occurrence)
     const target = _findTaskByTitleOcc(rule.target.title, rule.target.occurrence || 1);
     if (!target) continue;
 
-    // Respect "onlyIfBlank"
     if (rule.onlyIfBlank) {
       const curr = (rule.target.field === 'due') ? target.due_date : target.start_date;
       if (curr) continue;
     }
 
-    // Base date for these rules is the changed anchor START
     const baseYMD = (rule.base === 'anchor.start') ? value : null;
     if (!baseYMD) continue;
 
-    // Compute new date
     const newYMD = _computeTargetYMD ? _computeTargetYMD(baseYMD, rule)
                                      : addDaysYMD(baseYMD, rule.offsetDays || 0);
     if (!newYMD) continue;
 
-    // Persist + update cache + update the visible input (no refresh needed)
     if (rule.target.field === 'due') {
       await updateTaskDue(target.id, newYMD);
       target.due_date = newYMD;
 
+      // update the visible input immediately
       const row = document.getElementById(`task-${target.id}`);
       const dueInput = row?.querySelector('input[data-action="due"]');
       if (dueInput) {
-        dueInput.value = newYMD;          // update UI immediately
-        dueInput.classList.remove('date-empty');
+        dueInput.value = newYMD;                 // set property
+        dueInput.classList.remove('date-empty'); // fix blank styling
+        // nudge any listeners that style on input/change
+        dueInput.dispatchEvent(new Event('input', { bubbles: true }));
+        dueInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
     } else {
       await updateTaskStart(target.id, newYMD);
@@ -407,11 +411,16 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
       const row = document.getElementById(`task-${target.id}`);
       const startInput = row?.querySelector('input[data-action="start"]');
       if (startInput) {
-        startInput.value = newYMD;        // update UI immediately
+        startInput.value = newYMD;
         startInput.classList.remove('date-empty');
+        startInput.dispatchEvent(new Event('input', { bubbles: true }));
+        startInput.dispatchEvent(new Event('change', { bubbles: true }));
       }
     }
   }
+
+  _updateReceiveFinalPaymentHighlight?.();
+}
 
   // Special visual rule you added earlier
   _updateReceiveFinalPaymentHighlight?.();
@@ -520,8 +529,17 @@ window.addEventListener('hashchange', maybeScrollToTaskFromHash);
 
 // ---------- Render ----------
 function renderTasks(tasks){
+  // Build a fresh title index in the exact row order we’re about to render
+  _titleIndex = new Map();
+  (tasks || []).forEach(t => {
+    const key = _normTitle(t.title);
+    if (!_titleIndex.has(key)) _titleIndex.set(key, []);
+    _titleIndex.get(key).push(t.id);
+  });
+
   const body = document.getElementById('tasksBody');
   body.innerHTML = tasks.map(t => {
+    // ... keep the rest of your existing renderTasks exactly as-is ...
     const selected = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
     const label = selected.length ? selected.join(', ') : '— Select —';
     return `
@@ -596,17 +614,17 @@ function renderTasks(tasks){
       closeAssigneeMenus(); flash('Assignees cleared.');
     });
 
-   row.querySelector('[data-action="start"]').addEventListener('change', async (e) => {
+const startHandler = async (e) => {
   const v = e.target.value || null;
 
-  // Persist start date
+  // Save start
   await updateTaskStart(id, v);
 
-  // Keep local cache in sync
+  // Update local cache
   const local = _currentTasks.find(x => String(x.id) === String(id));
   if (local) local.start_date = v;
 
-  // Fire rules → calculate any downstream due dates immediately and reflect in UI
+  // Run date rules and update UI immediately
   await applyDateRulesAfterChange({
     anchorTitle: (local?.title ?? ''),
     fieldChanged: 'start',
@@ -614,7 +632,12 @@ function renderTasks(tasks){
   });
 
   flash('Start date updated.');
-});
+};
+
+// Fire when picker changes AND while editing
+const startEl = row.querySelector('[data-action="start"]');
+startEl.addEventListener('change', startHandler);
+startEl.addEventListener('input', startHandler);
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
       const v = e.target.value || null;
