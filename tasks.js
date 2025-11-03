@@ -555,6 +555,21 @@ try {
   tasks = [];
 }
 
+// If none exist, seed from template and reload
+if (!tasks.length) {
+  try {
+    await seedFromTemplate(db, project);
+    // normalize again in case the template titles were adjusted
+    await normalizeProjectTaskTitles(project.id);
+    tasks = await loadTasks(db, project.id);
+    console.log('[tasks] seeded, now have', tasks.length);
+    flash('Task list created from template.');
+  } catch (e) {
+    console.error('Auto-seed failed:', e);
+    flash('Could not create tasks from template. Check console.');
+  }
+}
+
   // Stable order
   tasks = (tasks || []).slice().sort((a,b) => {
     const pa = (a.position ?? 999999), pb = (b.position ?? 999999);
@@ -584,16 +599,12 @@ function flash(msg){ const el=document.getElementById('tasksMsg'); if(!el) retur
 async function loadTasks(db, projectId){
   const { data, error } = await db
     .from('tasks')
-    .select('id, title, status, assignees, assignee, start_date, due_date, notes, position, created_at')
+    .select('*')                           // <-- no join here
     .eq('project_id', projectId)
     .order('position', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
 
-  if (error) {
-    console.error('loadTasks error:', error);
-    flash('Could not load tasks (see console).');
-    return [];
-  }
+  if (error) throw error;
   return data || [];
 }
 function maybeScrollToTaskFromHash(){
