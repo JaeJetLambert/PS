@@ -103,10 +103,9 @@ const SIMPLE_RENAMES = [
   ['Send Contract', 'Send Design Agreement'],
 
   // Weekly Double Tap canonicalization (fix any 'Tab' typos)
-  ['Weekly Double Tab - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
-  ['Weekly Double Tab - Send IP to Client',     'Weekly Double Tap - Send IP to Client'],
-  ['Weekly Double Tap - Send Contract',         'Weekly Double Tap - Sign Design Agreement'],
-  ['Weekly Double Tab - Send Contract',         'Weekly Double Tap - Sign Design Agreement'], // (keep in case both variants existed)
+ ['Weekly Double Tap - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
+['Weekly Double Tab - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
+['Weekly Double Tab - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'], // unify Tab→Tap
 
   // Keep “Tap” canonical (left -> right both Tap is harmless but fine to retain)
   ['Weekly Double Tap - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
