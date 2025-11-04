@@ -50,7 +50,7 @@ const REMINDER_MAP = new Map(
 const OFFICIAL_TITLES = [
   "Initial Contact","Send the Process Document","Nudge Process Document","Schedule Initial Consultation",
   "Confirm Initial Consultation","Prepare Client Dossier","Have Initial Consultation","Clipboard on Katie's Desk",
-  "Send Design Agreement","Weekly Double Tab - Sign Design Agreement","Signed Design Agreement",
+  "Send Design Agreement","Weekly Double Tap - Sign Design Agreement","Signed Design Agreement",
   "Schedule Pictures and Measure","Make Google Drive Folder","Create Client Accounts in Both XERO Accounts",
   "Receive Deposit","Execute Pictures and Measure","Send P&M Review Email to Client","Folder on Sarah's Desk",
   "Upload Pics to Google Photos","Share Pics With Everyone on the Project","Create Initial Presentation",
@@ -84,12 +84,12 @@ const OFFICIAL_TITLES = [
 // Simple one-to-one renames (old -> new)
 const SIMPLE_RENAMES = [
   ['Send Contract', 'Send Design Agreement'],
-  ['Weekly Double Tap - Send Contract', 'Weekly Double Tab - Sign Design Agreement'],
-  ['Weekly Double Tab - Send Contract', 'Weekly Double Tab - Sign Design Agreement'],
-  ['Weekly Double Tap - Sign Design Agreement', 'Weekly Double Tab - Sign Design Agreement'], // unify Tap→Tab
+  ['Weekly Double Tab - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
+  ['Weekly Double Tab - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
+  // (No self-mapping; remove duplicate lines)
   ['Sign Design Agreement', 'Signed Design Agreement'],
-  ['PM punch list', 'PM punch list '], // ensure the trailing space matches your official title
-  ['Send Sub Meeting Review Email to Client', 'Send Sum Meeting Review Email to Client'], // unify "Sub"→"Sum" per new list
+  ['PM punch list', 'PM punch list '], // keep trailing space
+  ['Send Sub Meeting Review Email to Client', 'Send Sum Meeting Review Email to Client'],
 ];
 
 // Three formerly identical titles → disambiguate by order in list (position)
@@ -215,6 +215,16 @@ const DATE_RULES = [
     target:{title:'Nudge Process Document', field:'due'},
     base:'anchor.start', offsetDays:+14 },
 
+    // NEW: Weekly Double Tap - Sign Design Agreement self-resync
+{ when:{title:'Weekly Double Tap - Sign Design Agreement', on:'start'},
+  target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'},
+  base:'anchor.start', offsetDays:+14 },
+
+// NEW: Weekly Double Tap - Send IP to Client self-resync
+{ when:{title:'Weekly Double Tap - Send IP to Client', on:'start'},
+  target:{title:'Weekly Double Tap - Send IP to Client', field:'due'},
+  base:'anchor.start', offsetDays:+14 },
+
   // Initial Consultation anchors
   { when:{title:'Have Initial Consultation', on:'start'},
     target:{title:'Confirm Initial Consultation', field:'due'},
@@ -224,8 +234,8 @@ const DATE_RULES = [
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
 
   // Agreement follow-ups
-  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Weekly Double Tab - Sign Design Agreement', on:'start'}, target:{title:'Weekly Double Tab - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
+  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+  { when:{title:'Weekly Double Tap - Sign Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
 
   // After agreement is signed (milestone)
   { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure',  field:'due'}, base:'anchor.start', offsetDays:0 },
@@ -487,48 +497,45 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
     }
 
     const baseYMD = value; // all rules use anchor.start
-    const newYMD = _computeTargetYMD(baseYMD, rule);
-    if (!newYMD) continue;
+    let newYMD = _computeTargetYMD(baseYMD, rule);
+if (!newYMD) continue;
 
-    // Persist + update local cache + update visible input immediately
-    if (rule.target.field === 'due') {
+if (rule.target.field === 'due') {
   const adjYMD = adjustToWeekday(newYMD);
   await updateTaskDue(target.id, adjYMD);
   target.due_date = adjYMD;
-  newYMD = adjYMD; // so UI shows corrected date
 
-      const row = document.getElementById(`task-${target.id}`);
-      const el  = row?.querySelector('input[data-action="due"]');
-      if (el) {
-        el.value = newYMD;
-        el.classList.remove('date-empty');
-        // If you style on input/change, nudge those listeners
-        el.dispatchEvent(new Event('input',  { bubbles:true }));
-        el.dispatchEvent(new Event('change', { bubbles:true }));
-      }
-    } else {
-      await updateTaskStart(target.id, newYMD);
-      target.start_date = newYMD;
+  const row = document.getElementById(`task-${target.id}`);
+  const el  = row?.querySelector('input[data-action="due"]');
+  if (el) {
+    el.value = adjYMD;
+    el.classList.remove('date-empty');
+    el.dispatchEvent(new Event('input',  { bubbles:true }));
+    el.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+} else {
+  await updateTaskStart(target.id, newYMD);
+  target.start_date = newYMD;
 
-      const row = document.getElementById(`task-${target.id}`);
-      const el  = row?.querySelector('input[data-action="start"]');
-      if (el) {
-        el.value = newYMD;
-        el.classList.remove('date-empty');
-        el.dispatchEvent(new Event('input',  { bubbles:true }));
-        el.dispatchEvent(new Event('change', { bubbles:true }));
-      }
-    }
+  const row = document.getElementById(`task-${target.id}`);
+  const el  = row?.querySelector('input[data-action="start"]');
+  if (el) {
+    el.value = newYMD;
+    el.classList.remove('date-empty');
+    el.dispatchEvent(new Event('input',  { bubbles:true }));
+    el.dispatchEvent(new Event('change', { bubbles:true }));
+  }
+}
   }
 
   // Special highlight check for Receive Final Payment
   _updateReceiveFinalPaymentHighlight?.();
 }
 
-// --- Hard-wire: Send the Process Document (Start) -> Nudge Process Document (Due = +14)
+// --- Hard-wire: Send the Process Document (Start) -> Nudge Process Document (Due = +14, weekday-only)
 async function forceNudgeDueFromSend(sendStartYMD) {
   if (!sendStartYMD) return;
-  console.debug('[nudge-sync] setting Nudge due to', addDaysYMD(sendStartYMD,14), 'from Send start', sendStartYMD);
+  console.debug('[nudge-sync] setting Nudge due from Send start', sendStartYMD);
 
   // find the Nudge row from the in-memory list (no index assumptions)
   const target = (_currentTasks || []).find(
@@ -536,7 +543,9 @@ async function forceNudgeDueFromSend(sendStartYMD) {
   );
   if (!target) return;
 
-  const newYMD = addDaysYMD(sendStartYMD, 14);
+  // compute +14 then shift weekends to Monday
+  const rawYMD = addDaysYMD(sendStartYMD, 14);
+  const newYMD = adjustToWeekday(rawYMD);
   if (!newYMD) return;
 
   // persist
@@ -549,7 +558,6 @@ async function forceNudgeDueFromSend(sendStartYMD) {
   if (dueInput) {
     dueInput.value = newYMD;
     dueInput.classList.remove('date-empty');
-    // (optional) fire events if you have listeners that depend on them
     dueInput.dispatchEvent(new Event('input', { bubbles: true }));
     dueInput.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -841,7 +849,6 @@ function toggleAssigneeMenu(row){
   document.addEventListener('click', closer);
 }
 function closeAssigneeMenus(){ document.querySelectorAll('.assignee-menu').forEach(m=>{ m.classList.add('hidden'); m.style.display='none'; }); _openAssigneeRow=null; }
-function onGlobalClickCloseMenus(e){ if (e.target.closest('.assignee-cell')) return; closeAssigneeMenus(); }
 
 // ---------- Mutations ----------
 async function updateTaskAssignees(taskId, whoList){
@@ -858,17 +865,32 @@ async function updateTaskDue(taskId, dateStr){ const db=window.supabase; const {
 async function updateTaskNotes(taskId, text){ const db=window.supabase; const { error }=await db.from('tasks').update({ notes: text }).eq('id', taskId); if (error) throw error; }
 
 async function cascadeDependents(anchorTaskId){
-  const db=window.supabase;
-  const { data: anchorRows, error: e1 } = await db.from('tasks').select('due_date').eq('id', anchorTaskId).limit(1);
-  if (e1) throw e1;
-  const anchorDate = anchorRows?.[0]?.due_date || null; if (!anchorDate) return;
+  const db = window.supabase;
 
-  const { data: deps, error: e2 } = await db.from('task_dependencies').select('task_id, offset_days').eq('anchor_task_id', anchorTaskId);
+  // get the anchor's DUE date; if no due, nothing to propagate
+  const { data: anchorRows, error: e1 } = await db
+    .from('tasks')
+    .select('due_date')
+    .eq('id', anchorTaskId)
+    .limit(1);
+  if (e1) throw e1;
+
+  const anchorDate = anchorRows?.[0]?.due_date || null;
+  if (!anchorDate) return;
+
+  // fetch dependents and apply offsets
+  const { data: deps, error: e2 } = await db
+    .from('task_dependencies')
+    .select('task_id, offset_days')
+    .eq('anchor_task_id', anchorTaskId);
   if (e2) throw e2;
 
-  for (const d of (deps||[])){
-    const next = new Date(anchorDate); next.setDate(next.getDate() + (d.offset_days || 0));
-    const iso = next.toISOString().slice(0,10); await updateTaskDue(d.task_id, iso);
+  for (const d of (deps || [])) {
+    const next = new Date(anchorDate);
+    next.setDate(next.getDate() + (d.offset_days || 0));
+    // shift Saturday/Sunday → Monday
+    const isoShifted = adjustToWeekday(next.toISOString().slice(0,10));
+    await updateTaskDue(d.task_id, isoShifted);
   }
 }
 
