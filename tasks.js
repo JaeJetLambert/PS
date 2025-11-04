@@ -1,5 +1,5 @@
-const BUILD_TAG = 'v20251103h'; // <-- bump when you change ?v=... in project.html
-console.log(`tasks.js ${BUILD_TAG} loaded at`, new Date().toISOString());
+window.BUILD_TAG = window.BUILD_TAG || 'v20251103l';
+console.log(`tasks.js ${window.BUILD_TAG} loaded at`, new Date().toISOString());
 window.addEventListener('error', e => {
   console.error('[tasks.js global error]', e.message, e.filename, e.lineno, e.colno);
 });
