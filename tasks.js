@@ -1,4 +1,4 @@
-window.BUILD_TAG = window.BUILD_TAG || 'v20251103m';
+window.BUILD_TAG = window.BUILD_TAG || 'v20251104a';
 console.log(`tasks.js ${window.BUILD_TAG} loaded at`, new Date().toISOString());
 window.addEventListener('error', e => {
   console.error('[tasks.js global error]', e.message, e.filename, e.lineno, e.colno);

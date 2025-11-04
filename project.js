@@ -1,3 +1,4 @@
+console.log('project.js v20251104a loaded at', new Date().toISOString());
 // ===============================
 // project.js — Detail page logic (Complete + Abandon + Reactivate + Delete)
 // Prefers ?id=<uuid>, falls back to ?name=<string>
