@@ -84,12 +84,19 @@ const OFFICIAL_TITLES = [
 // Simple one-to-one renames (old -> new)
 const SIMPLE_RENAMES = [
   ['Send Contract', 'Send Design Agreement'],
+
+  // Weekly Double Tap canonicalization (fix any 'Tab' typos)
   ['Weekly Double Tab - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
-  ['Weekly Double Tab - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
-  // (No self-mapping; remove duplicate lines)
+  ['Weekly Double Tab - Send IP to Client',     'Weekly Double Tap - Send IP to Client'],
+  ['Weekly Double Tap - Send Contract',         'Weekly Double Tap - Sign Design Agreement'],
+  ['Weekly Double Tab - Send Contract',         'Weekly Double Tap - Sign Design Agreement'], // (keep in case both variants existed)
+
+  // Keep “Tap” canonical (left -> right both Tap is harmless but fine to retain)
+  ['Weekly Double Tap - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
+
   ['Sign Design Agreement', 'Signed Design Agreement'],
-  ['PM punch list', 'PM punch list '], // keep trailing space
-  ['Send Sub Meeting Review Email to Client', 'Send Sum Meeting Review Email to Client'],
+  ['PM punch list', 'PM punch list '], // ensure trailing space variant matches your official title
+  ['Send Sub Meeting Review Email to Client', 'Send Sum Meeting Review Email to Client'], // unify Sub→Sum
 ];
 
 // Three formerly identical titles → disambiguate by order in list (position)
