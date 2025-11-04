@@ -1,4 +1,4 @@
-window.BUILD_TAG = window.BUILD_TAG || 'v20251103l';
+window.BUILD_TAG = window.BUILD_TAG || 'v20251103m';
 console.log(`tasks.js ${window.BUILD_TAG} loaded at`, new Date().toISOString());
 window.addEventListener('error', e => {
   console.error('[tasks.js global error]', e.message, e.filename, e.lineno, e.colno);
@@ -38,8 +38,25 @@ function esc(s){ return (s ?? '').toString().replace(/[&<>"]/g, c => ({'&':'&amp
 function ymdLocal(d = new Date()){ const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${day}`; }
 
 // ---------- Title normalization / aliases ----------
-function _normalizeQuotes(s){ return (s||'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"'); }
-function _normTitle(s){ return _normalizeQuotes(String(s||'').trim()).toLowerCase(); }
+function _normalizeQuotes(s){
+  return (s||'')
+    .replace(/[’‘]/g,"'")
+    .replace(/[“”]/g,'"');
+}
+
+// NEW: collapse weird dashes/spaces so "Tab – Sign" == "Tab - Sign"
+function _normalizeDashesSpaces(s){
+  return (s||'')
+    .replace(/[\u2013\u2014]/g, '-')   // en/em dash → hyphen
+    .replace(/\u00A0/g, ' ')           // NBSP → space
+    .replace(/\s*-\s*/g, ' - ')        // normalize hyphen spacing
+    .replace(/\s+/g, ' ')              // collapse extra spaces
+    .trim();
+}
+
+function _normTitle(s){
+  return _normalizeDashesSpaces(_normalizeQuotes(String(s||''))).toLowerCase();
+}
 
 // Build a fast lookup once _normTitle exists
 const REMINDER_MAP = new Map(
