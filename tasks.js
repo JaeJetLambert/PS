@@ -16,6 +16,18 @@ let _openAssigneeRow = null;
 let _currentProjectId = null;
 let _currentTasks = [];
 let _titleIndex = new Map(); // title (normalized) -> [taskId, taskId, ...] in row order
+let _lineById = new Map(); // task.id -> line number (1-based)
+
+// Put this near the top (where your broken REMINDER_LINKS currently is)
+const REMINDER_LINKS = [
+  { anchor:'Schedule Initial Consultation',              target:'Have Initial Consultation' },
+  { anchor:'Schedule Pictures and Measure',              target:'Execute Pictures and Measure' },
+  { anchor:'Schedule Specific Presentation',             target:'Specific Presentation Meeting' },
+  { anchor:'Schedule Sub Meeting',                       target:'Sub Meeting' },
+  { anchor:'Schedule Final Pricing + Specifics Meeting', target:'Final Pricing + Specifics Meeting' },
+  { anchor:'Schedule Signing',                           target:'Sign Contract' },
+  { anchor:'Schedule Drapery Final Measure',             target:'Drapery Final Measure' },
+];
 
 // ---------- Utils ----------
 function debounce(fn, delay = 600) {
@@ -28,6 +40,11 @@ function ymdLocal(d = new Date()){ const y=d.getFullYear(), m=String(d.getMonth(
 // ---------- Title normalization / aliases ----------
 function _normalizeQuotes(s){ return (s||'').replace(/[’‘]/g,"'").replace(/[“”]/g,'"'); }
 function _normTitle(s){ return _normalizeQuotes(String(s||'').trim()).toLowerCase(); }
+
+// Build a fast lookup once _normTitle exists
+const REMINDER_MAP = new Map(
+  REMINDER_LINKS.map(({ anchor, target }) => [_normTitle(anchor), _normTitle(target)])
+);
 
 // New official names (your latest list)
 const OFFICIAL_TITLES = [
@@ -160,6 +177,30 @@ function _findTaskByTitleOcc(title, occ = 1) {
   const wantId = ids[(occ || 1) - 1];
   if (!wantId) return null;
   return (_currentTasks || []).find(t => String(t.id) === String(wantId)) || null;
+}
+
+function maybeRemindAfterStart(anchorTitle){
+  if (!anchorTitle) return;
+  const targetTitle = REMINDER_MAP.get(_normTitle(anchorTitle));
+  if (!targetTitle) return;
+
+  // Find the target task
+  const target = _findTaskByTitleOcc(targetTitle, 1);
+  if (!target) return;
+
+  // Only remind if the target START date is empty
+  if (target.start_date) return;
+
+  const lineNum = _lineById?.get(String(target.id));
+  const suffix = lineNum ? ` (line ${lineNum})` : '';
+  alert(`Reminder: set a START date for "${target.title}"${suffix}.`);
+
+  // Nice-to-have: scroll + highlight the target row
+  const row = document.getElementById(`task-${target.id}`);
+  if (row) {
+    row.scrollIntoView({ behavior:'smooth', block:'center' });
+    highlightRow(row);
+  }
 }
 
 // ---------- RULES (already aligned to your new names) ----------
@@ -370,7 +411,7 @@ function findNextDueTaskId(tasks){
   const overdue = open.filter(t => t.due_date && t.due_date < today)
     .sort((a,b) => (a.due_date === b.due_date)
       ? ((a.position??9e9) - (b.position??9e9))
-      : b.due_date.localeCompare(a.due_date));
+      : a.due_date.localeCompare(b.due_date));
   if (overdue[0]) return overdue[0].id;
 
   const byPos = open.slice().sort((a,b) => {
@@ -529,15 +570,16 @@ async function initTasksUI(project) {
     <div class="info-card" style="padding:0;">
       <table id="tasksTable" class="tasks-table" style="width:100%; table-layout:fixed; border-collapse:separate; border-spacing:0;">
         <thead>
-          <tr style="border-bottom:1px solid #e6e8ee;">
-            <th style="text-align:left; padding:.6rem; width:180px;">Assignee</th>
-            <th style="text-align:left; padding:.6rem; width:220px;">Task</th>
-            <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
-            <th style="text-align:left; padding:.6rem; width:150px;">Start</th>
-            <th style="text-align:left; padding:.6rem; width:150px;">Due</th>
-            <th style="text-align:left; padding:.6rem;">Notes</th>
-          </tr>
-        </thead>
+  <tr style="border-bottom:1px solid #e6e8ee;">
+    <th style="text-align:right; padding:.6rem; width:48px;">#</th>
+    <th style="text-align:left;  padding:.6rem; width:180px;">Assignee</th>
+    <th style="text-align:left;  padding:.6rem; width:220px;">Task</th>
+    <th style="text-align:center; padding:.6rem; width:70px;">Done</th>
+    <th style="text-align:left;  padding:.6rem; width:150px;">Start</th>
+    <th style="text-align:left;  padding:.6rem; width:150px;">Due</th>
+    <th style="text-align:left;  padding:.6rem;">Notes</th>
+  </tr>
+</thead>
         <tbody id="tasksBody"></tbody>
       </table>
     </div>
@@ -629,15 +671,19 @@ function renderTasks(tasks){
     if (!_titleIndex.has(key)) _titleIndex.set(key, []);
     _titleIndex.get(key).push(t.id);
   });
-
+  _lineById = new Map();
+  (tasks || []).forEach((t, i) => _lineById.set(String(t.id), i + 1));
   const body = document.getElementById('tasksBody');
   body.innerHTML = tasks.map(t => {
     // ... keep the rest of your existing renderTasks exactly as-is ...
     const selected = Array.isArray(t.assignees) ? t.assignees : (t.assignee ? [t.assignee] : []);
     const label = selected.length ? selected.join(', ') : '— Select —';
-    return `
-      <tr id="task-${t.id}" data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
-        <td class="assignee-cell" style="padding:.5rem .6rem;">
+    const lineNum = _lineById.get(String(t.id)) || '';
+
+return `
+  <tr id="task-${t.id}" data-id="${t.id}" style="border-bottom:1px solid #f0f2f6;">
+    <td class="line-num" style="padding:.5rem .6rem; text-align:right; opacity:.7; width:48px;">${lineNum}</td>
+    <td class="assignee-cell" style="padding:.5rem .6rem;">
           <div class="assignee-box" data-action="assignee-toggle" style="display:flex; align-items:center; gap:.35rem; cursor:pointer;">
             <span class="assignee-label">${esc(label)}</span>
             <span class="caret">▾</span>
@@ -729,7 +775,7 @@ const startHandler = async (e) => {
     fieldChanged: 'start',
     value: v
   });
-
+  maybeRemindAfterStart(thisTitle);
   flash('Start date updated.');
 };
 
@@ -764,17 +810,24 @@ startEl.addEventListener('change', startHandler);
     notesEl.addEventListener('blur', async (e) => { await updateTaskNotes(id, (e.target.value && e.target.value.trim()) ? e.target.value.trim() : null); });
   });
 
-  document.addEventListener('click', onGlobalClickCloseMenus, { once: true });
-}
+  }
 function syncDateEmptyClass(el){ const isEmpty = !el.value || String(el.value).trim()===''; el.classList.toggle('date-empty', isEmpty); }
 
 // ---------- Assignee menu ----------
 function toggleAssigneeMenu(row){
   const menu=row.querySelector('.assignee-menu'); if(!menu) return;
   const isOpen = menu.style.display!=='none' && !menu.classList.contains('hidden');
-  if (isOpen){ menu.classList.add('hidden'); menu.style.display='none'; _openAssigneeRow=null; return; }
-  closeAssigneeMenus(); menu.classList.remove('hidden'); menu.style.display='block';
-  row.querySelector('.assignee-cell').style.position='relative'; _openAssigneeRow=row.getAttribute('data-id');
+  if (isOpen){
+    menu.classList.add('hidden'); menu.style.display='none'; _openAssigneeRow=null; return;
+  }
+  closeAssigneeMenus();
+  menu.classList.remove('hidden'); menu.style.display='block';
+  row.querySelector('.assignee-cell').style.position='relative';
+  _openAssigneeRow=row.getAttribute('data-id');
+
+  // add the outside-click listener now, so every open gets one
+  const closer = (e) => { if (!e.target.closest('.assignee-cell')) { closeAssigneeMenus(); document.removeEventListener('click', closer); } };
+  document.addEventListener('click', closer);
 }
 function closeAssigneeMenus(){ document.querySelectorAll('.assignee-menu').forEach(m=>{ m.classList.add('hidden'); m.style.display='none'; }); _openAssigneeRow=null; }
 function onGlobalClickCloseMenus(e){ if (e.target.closest('.assignee-cell')) return; closeAssigneeMenus(); }
