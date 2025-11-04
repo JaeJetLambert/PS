@@ -436,7 +436,14 @@ function _updateReceiveFinalPaymentHighlight(){
     dueInput.style.borderColor = ''; dueInput.style.background = '';
   }
 }
-
+function adjustToWeekday(ymd) {
+  if (!ymd) return ymd;
+  const dt = new Date(ymd);
+  const day = dt.getDay(); // 0=Sun, 6=Sat
+  if (day === 6) dt.setDate(dt.getDate() + 2); // Saturday → Monday
+  if (day === 0) dt.setDate(dt.getDate() + 1); // Sunday → Monday
+  return dt.toISOString().slice(0,10);
+}
 // ---------- Apply date rules ----------
 async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
   const db = window.supabase;
@@ -485,8 +492,10 @@ async function applyDateRulesAfterChange({ anchorTitle, fieldChanged, value }) {
 
     // Persist + update local cache + update visible input immediately
     if (rule.target.field === 'due') {
-      await updateTaskDue(target.id, newYMD);
-      target.due_date = newYMD;
+  const adjYMD = adjustToWeekday(newYMD);
+  await updateTaskDue(target.id, adjYMD);
+  target.due_date = adjYMD;
+  newYMD = adjYMD; // so UI shows corrected date
 
       const row = document.getElementById(`task-${target.id}`);
       const el  = row?.querySelector('input[data-action="due"]');
@@ -785,8 +794,10 @@ startEl.addEventListener('input', startHandler);
 startEl.addEventListener('change', startHandler);
 
     row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
-      const v = e.target.value || null;
+      let v = e.target.value || null;
+      v = adjustToWeekday(v);
       await updateTaskDue(id, v);
+      e.target.value = v; // reflect the corrected weekday in UI
       const local = _currentTasks.find(x => String(x.id) === String(id));
       if (local) local.due_date = v;
       await cascadeDependents(id);
