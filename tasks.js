@@ -577,45 +577,98 @@ return `
 
 const startHandler = async (e) => {
   const v = e.target.value || null;
+  const id = e.target.closest('tr')?.getAttribute('data-id');
 
-  // Save start
+  // 1) Save start in DB
   await updateTaskStart(id, v);
 
-  // Update local cache
+  // 2) Update local cache for this row
   const local = _currentTasks.find(x => String(x.id) === String(id));
   if (local) local.start_date = v;
 
-  // *** NEW: if this row is "Send the Process Document", force Nudge due = start+14
+  // 3) (Optional legacy) If this row is "Send the Process Document", keep your inline nudge behavior
   const thisTitle = local?.title || '';
   if (_normTitle(thisTitle) === _normTitle('Send the Process Document')) {
     await forceNudgeDueFromSend(v);
   }
 
-  // Existing rule-engine cascade (keep this)
-  await applyDateRulesAfterChange({
-    anchorTitle: (local?.title ?? ''),
-    fieldChanged: 'start',
-    value: v
-  });
+  // 4) REFRESH from DB so DB triggers/logic show up immediately
+  //    - Get dependents of this anchor (if any)
+  const { data: deps, error: depsErr } = await window.supabase
+    .from('task_dependencies')
+    .select('task_id')
+    .eq('anchor_task_id', id);
+
+  const refreshIds = new Set([id]);
+  if (!depsErr && Array.isArray(deps)) {
+    for (const d of deps) refreshIds.add(String(d.task_id));
+  }
+
+  if (refreshIds.size) {
+    const { data: rows } = await window.supabase
+      .from('tasks')
+      .select('id, start_date, due_date, title')
+      .in('id', Array.from(refreshIds));
+
+    // Merge new dates into _currentTasks and live inputs
+    if (rows && rows.length) {
+      for (const r of rows) {
+        const idx = _currentTasks.findIndex(t => String(t.id) === String(r.id));
+        if (idx >= 0) {
+          _currentTasks[idx].start_date = r.start_date;
+          _currentTasks[idx].due_date   = r.due_date;
+
+          const rowEl = document.getElementById(`task-${r.id}`);
+          if (rowEl) {
+            const startEl = rowEl.querySelector('input[data-action="start"]');
+            const dueEl   = rowEl.querySelector('input[data-action="due"]');
+            if (startEl) {
+              startEl.value = r.start_date || '';
+              startEl.classList.toggle('date-empty', !r.start_date);
+            }
+            if (dueEl) {
+              dueEl.value = r.due_date || '';
+              dueEl.classList.toggle('date-empty', !r.due_date);
+            }
+          }
+        }
+      }
+    }
+  }
+
   maybeRemindAfterStart(thisTitle);
   flash('Start date updated.');
 };
 
-// Fire when picker changes AND while editing
-const startEl = row.querySelector('[data-action="start"]');
-startEl.addEventListener('input', startHandler);
-startEl.addEventListener('change', startHandler);
+// DUE change → still allow manual edits, but no JS cascade (DB owns logic now)
+row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
+  const id = e.target.closest('tr')?.getAttribute('data-id');
+  let v = e.target.value || null;
+  v = adjustToWeekday(v);
+  await updateTaskDue(id, v);
+  e.target.value = v;
 
-    row.querySelector('[data-action="due"]').addEventListener('change', async (e) => {
-      let v = e.target.value || null;
-      v = adjustToWeekday(v);
-      await updateTaskDue(id, v);
-      e.target.value = v; // reflect the corrected weekday in UI
-      const local = _currentTasks.find(x => String(x.id) === String(id));
-      if (local) local.due_date = v;
-      await cascadeDependents(id);
-      flash('Due date updated.');
-    });
+  const local = _currentTasks.find(x => String(x.id) === String(id));
+  if (local) local.due_date = v;
+
+  // Optionally refresh this task only (keeps UI consistent with DB)
+  const { data: rows } = await window.supabase
+    .from('tasks')
+    .select('id, due_date')
+    .eq('id', id)
+    .limit(1);
+  const r = rows?.[0];
+  if (r) {
+    const rowEl = document.getElementById(`task-${r.id}`);
+    const dueEl = rowEl?.querySelector('input[data-action="due"]');
+    if (dueEl) {
+      dueEl.value = r.due_date || '';
+      dueEl.classList.toggle('date-empty', !r.due_date);
+    }
+  }
+
+  flash('Due date updated.');
+});
 
     row.querySelector('[data-action="toggleDone"]').addEventListener('change', async (e) => {
       const checked = e.target.checked;
