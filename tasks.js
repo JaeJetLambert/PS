@@ -67,7 +67,7 @@ const REMINDER_MAP = new Map(
 const OFFICIAL_TITLES = [
   "Initial Contact","Send the Process Document","Nudge Process Document","Schedule Initial Consultation",
   "Confirm Initial Consultation","Prepare Client Dossier","Have Initial Consultation","Clipboard on Katie's Desk",
-  "Send Design Agreement","Weekly Double Tap - Sign Design Agreement","Signed Design Agreement",
+  "Send Design Agreement","Weekly Check In - Sign Design Agreement","Signed Design Agreement",
   "Schedule Pictures and Measure","Make Google Drive Folder","Create Client Accounts in Both XERO Accounts",
   "Receive Deposit","Execute Pictures and Measure","Send P&M Review Email to Client","Folder on Sarah's Desk",
   "Upload Pics to Google Photos","Share Pics With Everyone on the Project","Create Initial Presentation",
@@ -102,14 +102,16 @@ const OFFICIAL_TITLES = [
 const SIMPLE_RENAMES = [
   ['Send Contract', 'Send Design Agreement'],
 
-  // Weekly Double Tap canonicalization (fix any 'Tab' typos)
- ['Weekly Double Tap - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
-['Weekly Double Tab - Send Contract', 'Weekly Double Tap - Sign Design Agreement'],
-['Weekly Double Tab - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'], // unify Tab→Tap
+  // Canonicalize legacy "Weekly Double Tap/Tab" → new "Weekly Check In"
+  ['Weekly Double Tap - Sign Design Agreement', 'Weekly Check In - Sign Design Agreement'],
+  ['Weekly Double Tab - Sign Design Agreement', 'Weekly Check In - Sign Design Agreement'],
+  ['Weekly Double Tap - Send Design Agreement', 'Weekly Check In - Send Design Agreement'],
+  ['Weekly Double Tab - Send Design Agreement', 'Weekly Check In - Send Design Agreement'],
 
-  // Keep “Tap” canonical (left -> right both Tap is harmless but fine to retain)
-  ['Weekly Double Tap - Sign Design Agreement', 'Weekly Double Tap - Sign Design Agreement'],
+  // (Keep legacy IP mapping, unrelated to Design Agreement)
+  ['Weekly Double Tap - Send IP to Client', 'Weekly Double Tap - Send IP to Client'],
 
+  // Downstream canonicalizations you already had
   ['Sign Design Agreement', 'Signed Design Agreement'],
   ['PM punch list', 'PM punch list '], // ensure trailing space variant matches your official title
   ['Send Sub Meeting Review Email to Client', 'Send Sum Meeting Review Email to Client'], // unify Sub→Sum
@@ -238,11 +240,6 @@ const DATE_RULES = [
     target:{title:'Nudge Process Document', field:'due'},
     base:'anchor.start', offsetDays:+14 },
 
-    // NEW: Weekly Double Tap - Sign Design Agreement self-resync
-{ when:{title:'Weekly Double Tap - Sign Design Agreement', on:'start'},
-  target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'},
-  base:'anchor.start', offsetDays:+14 },
-
 // NEW: Weekly Double Tap - Send IP to Client self-resync
 { when:{title:'Weekly Double Tap - Send IP to Client', on:'start'},
   target:{title:'Weekly Double Tap - Send IP to Client', field:'due'},
@@ -256,9 +253,16 @@ const DATE_RULES = [
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk",    field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
 
-  // Agreement follow-ups
-  { when:{title:'Send Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
-  { when:{title:'Weekly Double Tap - Sign Design Agreement', on:'start'}, target:{title:'Weekly Double Tap - Sign Design Agreement', field:'due'}, base:'anchor.start', offsetDays:+14 },
+  // Weekly Check In — Design Agreement follow-ups
+// 1) "Weekly Check In - Send Design Agreement": due = start + 14 days (self)
+{ when:{title:'Weekly Check In - Send Design Agreement', on:'start'},
+  target:{title:'Weekly Check In - Send Design Agreement', field:'due'},
+  base:'anchor.start', offsetDays:+14 },
+
+// 2) "Weekly Check In - Sign Design Agreement": due = 14 days after the *start* of "Weekly Check In - Send Design Agreement"
+{ when:{title:'Weekly Check In - Send Design Agreement', on:'start'},
+  target:{title:'Weekly Check In - Sign Design Agreement', field:'due'},
+  base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
 
   // After agreement is signed (milestone)
   { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure',  field:'due'}, base:'anchor.start', offsetDays:0 },
