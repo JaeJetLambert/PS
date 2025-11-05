@@ -253,16 +253,17 @@ const DATE_RULES = [
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:"Clipboard on Katie's Desk",    field:'due'}, base:'anchor.start', offsetDays:+1 },
   { when:{title:'Have Initial Consultation', on:'start'}, target:{title:'Send Design Agreement',        field:'due'}, base:'anchor.start', offsetDays:+1 },
 
-  // Weekly Check In — Design Agreement follow-ups
-// 1) "Weekly Check In - Send Design Agreement": due = start + 14 days (self)
+ // Weekly Check In — Send Design Agreement rules
+
+// A) Base trigger: from "Send Design Agreement" start → set WCI Send DA due = +14d
+{ when:{title:'Send Design Agreement', on:'start'},
+  target:{title:'Weekly Check In - Send Design Agreement', field:'due'},
+  base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
+
+// B) Self trigger: from "Weekly Check In - Send Design Agreement" start → set its own due = +14d
 { when:{title:'Weekly Check In - Send Design Agreement', on:'start'},
   target:{title:'Weekly Check In - Send Design Agreement', field:'due'},
   base:'anchor.start', offsetDays:+14 },
-
-// 2) "Weekly Check In - Sign Design Agreement": due = 14 days after the *start* of "Weekly Check In - Send Design Agreement"
-{ when:{title:'Weekly Check In - Send Design Agreement', on:'start'},
-  target:{title:'Weekly Check In - Sign Design Agreement', field:'due'},
-  base:'anchor.start', offsetDays:+14, onlyIfBlank:true },
 
   // After agreement is signed (milestone)
   { when:{title:'Signed Design Agreement', on:'start'}, target:{title:'Schedule Pictures and Measure',  field:'due'}, base:'anchor.start', offsetDays:0 },
